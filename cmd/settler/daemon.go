@@ -22,33 +22,13 @@ import (
 )
 
 var foregroundFlag bool
-var killFlag bool
 
 func init() {
-	daemonCmd.AddCommand(daemonStartCmd)
-	daemonCmd.AddCommand(daemonStopCmd)
-	daemonCmd.AddCommand(daemonStatusCmd)
-	daemonCmd.Flags().BoolVarP(&foregroundFlag, "foreground", "f", false, "Run daemon in foreground")
-	daemonCmd.Flags().BoolVarP(&killFlag, "kill", "k", false, "Kill the running background daemon")
-	daemonCmd.Flags().MarkHidden("foreground")
-	rootCmd.AddCommand(daemonCmd)
-}
-
-var daemonCmd = &cobra.Command{
-	Use:   "daemon",
-	Short: "Starts the settlerWallet daemon (Telegram Bot).",
-	Run: func(cmd *cobra.Command, args []string) {
-		if killFlag {
-			daemonStopCmd.Run(cmd, args)
-			return
-		}
-		if !foregroundFlag {
-			fmt.Println("ℹ️  To run in background, use 'settler daemon start'.")
-			fmt.Println("ℹ️  To run in foreground for debugging, use 'settler daemon -f'.")
-			return
-		}
-		runDaemon()
-	},
+	rootCmd.AddCommand(daemonStartCmd)
+	rootCmd.AddCommand(daemonStopCmd)
+	rootCmd.AddCommand(daemonStatusCmd)
+	rootCmd.Flags().BoolVarP(&foregroundFlag, "foreground", "f", false, "Run daemon in foreground")
+	rootCmd.Flags().MarkHidden("foreground")
 }
 
 var daemonStartCmd = &cobra.Command{
@@ -69,7 +49,7 @@ var daemonStartCmd = &cobra.Command{
 
 		// Re-execute the binary with the -f flag
 		executable, _ := os.Executable()
-		child := exec.Command(executable, "daemon", "-f")
+		child := exec.Command(executable, "-f") // No subcommand needed now
 		child.Stdout = logFile
 		child.Stderr = logFile
 		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // Detach
@@ -234,7 +214,7 @@ func runDaemon() {
 		accountID := getAccountID(uid)
 		acc, _ := db.GetAccount(accountID)
 		if acc == nil {
-			return c.Send("Welcome! You don't have an account yet. Send /setup to create one or link a local account using `settler link` from your CLI.", menu)
+			return c.Send("Welcome! You don't have an account yet. Send /setup to create one or link a local account using `settlerengine link` from your CLI.", menu)
 		}
 
 		welcomeMsg := "Welcome back!"
