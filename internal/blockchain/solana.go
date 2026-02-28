@@ -40,11 +40,68 @@ func (c *SolanaClient) GetBalance(ctx context.Context, address string) (*Balance
 	}, nil
 }
 
+func (c *SolanaClient) GetTokenBalances(ctx context.Context, address string) ([]*Balance, error) {
+	pubKey, err := solana.PublicKeyFromBase58(address)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter for all token accounts (SPL Token Program)
+	out, err := c.client.GetTokenAccountsByOwner(
+		ctx,
+		pubKey,
+		&rpc.GetTokenAccountsConfig{
+			ProgramId: &solana.TokenProgramID,
+		},
+		&rpc.GetTokenAccountsOpts{
+			Commitment: rpc.CommitmentFinalized,
+			Encoding:   solana.EncodingJSONParsed,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*Balance
+	for _, acc := range out.Value {
+		parsed := acc.Account.Data.GetRawJSON().(map[string]interface{})
+		info := parsed["parsed"].(map[string]interface{})["info"].(map[string]interface{})
+		tokenAmount := info["tokenAmount"].(map[string]interface{})
+		
+		uiAmount := tokenAmount["uiAmount"].(float64)
+		if uiAmount == 0 {
+			continue
+		}
+
+		mint := info["mint"].(string)
+		decimals := int(tokenAmount["decimals"].(float64))
+		amountStr := tokenAmount["amount"].(string)
+		amount, _ := new(big.Int).SetString(amountStr, 10)
+
+		// For now, use the first 4 chars of mint as symbol if we don't have a lookup
+		symbol := mint[:4]
+		if mint == "Es9vMFrzaDCSTMdAhcXuzDeWvVK7UXhcrxspTS7jsX3" {
+			symbol = "USDT"
+		} else if mint == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" {
+			symbol = "USDC"
+		}
+
+		results = append(results, &Balance{
+			Chain:    vault.ChainSolana,
+			Address:  mint,
+			Symbol:   symbol,
+			Amount:   amount,
+			Decimals: decimals,
+		})
+	}
+
+	return results, nil
+}
+
 func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error) {
 	if from.Chain != vault.ChainSolana {
 		return nil, fmt.Errorf("invalid chain for Solana transfer")
 	}
-
 
 	fromPubKey, err := solana.PublicKeyFromBase58(from.Address)
 	if err != nil {

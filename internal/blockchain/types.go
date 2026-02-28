@@ -33,6 +33,7 @@ type TransactionResult struct {
 // Client defines the interface for interacting with different blockchains.
 type Client interface {
 	GetBalance(ctx context.Context, address string) (*Balance, error)
+	GetTokenBalances(ctx context.Context, address string) ([]*Balance, error)
 	Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error)
 }
 

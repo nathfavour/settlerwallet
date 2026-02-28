@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -39,11 +40,56 @@ func (c *BNBClient) GetBalance(ctx context.Context, address string) (*Balance, e
 	}, nil
 }
 
+func (c *BNBClient) GetTokenBalances(ctx context.Context, address string) ([]*Balance, error) {
+	// Predefined common BEP-20 tokens on BNB Chain
+	tokens := []struct {
+		Symbol   string
+		Address  string
+		Decimals int
+	}{
+		{"USDT", "0x55d398326f99059fF775485246999027B3197955", 18},
+		{"BUSD", "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", 18},
+		{"USDC", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18},
+		{"DAI", "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3", 18},
+	}
+
+	var results []*Balance
+	userAddr := common.HexToAddress(address)
+
+	for _, t := range tokens {
+		tokenAddr := common.HexToAddress(t.Address)
+		// 70a08231 is the 4-byte selector for balanceOf(address)
+		data := append(common.Hex2Bytes("70a08231"), common.LeftPadBytes(userAddr.Bytes(), 32)...)
+
+		msg := types.CallMsg{
+			To:   &tokenAddr,
+			Data: data,
+		}
+
+		res, err := c.client.CallContract(ctx, msg, nil)
+		if err != nil {
+			continue // Skip if error
+		}
+
+		bal := new(big.Int).SetBytes(res)
+		if bal.Sign() > 0 { // Only add if balance > 0
+			results = append(results, &Balance{
+				Chain:    vault.ChainBNB,
+				Address:  t.Address,
+				Symbol:   t.Symbol,
+				Amount:   bal,
+				Decimals: t.Decimals,
+			})
+		}
+	}
+
+	return results, nil
+}
+
 func (c *BNBClient) Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error) {
 	if from.Chain != vault.ChainBNB {
 		return nil, fmt.Errorf("invalid chain for BNB transfer")
 	}
-
 
 	fromAddress := common.HexToAddress(from.Address)
 	nonce, err := c.client.PendingNonceAt(ctx, fromAddress)
