@@ -19,7 +19,7 @@ type Account struct {
 	Type       AccountType
 	Salt       []byte
 	Iterations int
-	LinkedTGID int64 // Telegram UID linked to this local account
+	LinkedTGID int64
 }
 
 type LinkRequest struct {
@@ -57,6 +57,11 @@ func NewDB(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Enable foreign keys
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS accounts (
 			id TEXT PRIMARY KEY,
@@ -69,7 +74,8 @@ func NewDB(path string) (*DB, error) {
 			account_id TEXT PRIMARY KEY,
 			tg_id INTEGER,
 			code TEXT,
-			expires_at INTEGER
+			expires_at INTEGER,
+			FOREIGN KEY(account_id) REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS wallets (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,7 +85,7 @@ func NewDB(path string) (*DB, error) {
 			address TEXT,
 			encrypted_seed BLOB,
 			salt BLOB,
-			FOREIGN KEY(account_id) REFERENCES accounts(id)
+			FOREIGN KEY(account_id) REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS guardrails (
 			account_id TEXT PRIMARY KEY,
@@ -87,7 +93,7 @@ func NewDB(path string) (*DB, error) {
 			daily_limit TEXT,
 			current_spend TEXT,
 			last_reset INTEGER,
-			FOREIGN KEY(account_id) REFERENCES accounts(id)
+			FOREIGN KEY(account_id) REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS config (
 			key TEXT PRIMARY KEY,
@@ -111,6 +117,12 @@ func (db *DB) SaveAccount(a Account) error {
 	}
 	query := `INSERT OR REPLACE INTO accounts (id, type, salt, iterations, linked_tg_id) VALUES (?, ?, ?, ?, ?)`
 	_, err := db.conn.Exec(query, a.ID, a.Type, a.Salt, a.Iterations, linkedID)
+	return err
+}
+
+func (db *DB) RenameAccount(oldID, newID string) error {
+	query := `UPDATE accounts SET id = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, newID, oldID)
 	return err
 }
 
@@ -152,19 +164,6 @@ func (db *DB) CreateLinkRequest(lr LinkRequest) error {
 	query := `INSERT OR REPLACE INTO link_requests (account_id, tg_id, code, expires_at) VALUES (?, ?, ?, ?)`
 	_, err := db.conn.Exec(query, lr.AccountID, lr.TGID, lr.Code, lr.ExpiresAt)
 	return err
-}
-
-func (db *DB) GetLinkRequest(accountID string) (*LinkRequest, error) {
-	query := `SELECT account_id, tg_id, code, expires_at FROM link_requests WHERE account_id = ?`
-	row := db.conn.QueryRow(query, accountID)
-	var lr LinkRequest
-	if err := row.Scan(&lr.AccountID, &lr.TGID, &lr.Code, &lr.ExpiresAt); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &lr, nil
 }
 
 func (db *DB) GetLinkRequestByTGID(tgID int64) (*LinkRequest, error) {

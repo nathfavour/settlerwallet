@@ -16,29 +16,37 @@ import (
 )
 
 var (
-	accountName string
+	accountNameFlag string
 )
 
 func init() {
-	setupCmd.Flags().StringVarP(&accountName, "name", "n", "default", "Name of the local account to create/manage")
+	setupCmd.Flags().StringVarP(&accountNameFlag, "name", "n", "", "Name of the local account to create/manage")
 	rootCmd.AddCommand(setupCmd)
 }
 
 var setupCmd = &cobra.Command{
-	Use:   "setup",
+	Use:   "setup [account_name]",
 	Short: "Setup a local account and wallet.",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		name := "default"
+		if len(args) > 0 {
+			name = args[0]
+		} else if accountNameFlag != "" {
+			name = accountNameFlag
+		}
+
 		db, err := initDB()
 		if err != nil {
 			log.Fatalf("❌ Database error: %v", err)
 		}
 		defer db.Close()
 
-		accountID := fmt.Sprintf("local:%s", accountName)
+		accountID := fmt.Sprintf("local:%s", name)
 		acc, err := db.GetAccount(accountID)
 
 		if acc != nil {
-			fmt.Printf("ℹ️ Account '%s' already exists.\n", accountName)
+			fmt.Printf("ℹ️ Account '%s' already exists.\n", name)
 			wallets, _ := db.GetWallets(accountID)
 			if len(wallets) > 0 {
 				fmt.Println("\nExisting Wallets:")
@@ -56,7 +64,7 @@ var setupCmd = &cobra.Command{
 		}
 
 		// Setup flow
-		fmt.Printf("\n🚀 Setting up account: %s\n", accountName)
+		fmt.Printf("\n🚀 Setting up account: %s\n", name)
 		password := readPassword("Enter account encryption password: ")
 		confirm := readPassword("Confirm password: ")
 
@@ -103,7 +111,7 @@ var setupCmd = &cobra.Command{
 		// Save BNB Wallet
 		db.SaveWallet(persistence.Wallet{
 			AccountID:     accountID,
-			Name:          "Main BNB",
+			Name:          fmt.Sprintf("BNB-%d", len(args)+1), // Basic naming
 			Chain:         string(vault.ChainBNB),
 			Address:       bnbAddr,
 			EncryptedSeed: encryptedSeed,
@@ -113,7 +121,7 @@ var setupCmd = &cobra.Command{
 		// Save Solana Wallet
 		db.SaveWallet(persistence.Wallet{
 			AccountID:     accountID,
-			Name:          "Main Solana",
+			Name:          fmt.Sprintf("SOL-%d", len(args)+1), // Basic naming
 			Chain:         string(vault.ChainSolana),
 			Address:       solAddr,
 			EncryptedSeed: encryptedSeed,

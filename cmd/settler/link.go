@@ -10,7 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var tgID int64
+var (
+	tgID        int64
+	accountName string
+)
 
 func init() {
 	linkCmd.Flags().StringVarP(&accountName, "name", "n", "default", "Name of the local account to link")
