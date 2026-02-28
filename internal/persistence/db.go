@@ -7,18 +7,36 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type UserVault struct {
-	TelegramID    int64
+type AccountType string
+
+const (
+	AccountLocal    AccountType = "local"
+	AccountTelegram AccountType = "telegram"
+)
+
+type Account struct {
+	ID         string // "local:<name>" or "tg:<uid>"
+	Type       AccountType
+	Salt       []byte
+	Iterations int
+}
+
+type Wallet struct {
+	ID            int
+	AccountID     string
+	Name          string
+	Chain         string
+	Address       string
 	EncryptedSeed []byte
 	Salt          []byte
 }
 
 type UserRules struct {
-	TelegramID      int64
-	MaxSlippage     float64
-	DailyLimit      string // big.Int as string
-	CurrentSpend    string // big.Int as string
-	LastReset       int64  // Unix timestamp
+	AccountID    string
+	MaxSlippage  float64
+	DailyLimit   string
+	CurrentSpend string
+	LastReset    int64
 }
 
 type DB struct {
@@ -32,17 +50,29 @@ func NewDB(path string) (*DB, error) {
 	}
 
 	queries := []string{
-		`CREATE TABLE IF NOT EXISTS vaults (
-			telegram_id INTEGER PRIMARY KEY,
+		`CREATE TABLE IF NOT EXISTS accounts (
+			id TEXT PRIMARY KEY,
+			type TEXT,
+			salt BLOB,
+			iterations INTEGER
+		);`,
+		`CREATE TABLE IF NOT EXISTS wallets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id TEXT,
+			name TEXT,
+			chain TEXT,
+			address TEXT,
 			encrypted_seed BLOB,
-			salt BLOB
+			salt BLOB,
+			FOREIGN KEY(account_id) REFERENCES accounts(id)
 		);`,
 		`CREATE TABLE IF NOT EXISTS guardrails (
-			telegram_id INTEGER PRIMARY KEY,
+			account_id TEXT PRIMARY KEY,
 			max_slippage REAL,
 			daily_limit TEXT,
 			current_spend TEXT,
-			last_reset INTEGER
+			last_reset INTEGER,
+			FOREIGN KEY(account_id) REFERENCES accounts(id)
 		);`,
 	}
 
@@ -55,45 +85,85 @@ func NewDB(path string) (*DB, error) {
 	return &DB{conn: db}, nil
 }
 
-func (db *DB) SaveVault(v UserVault) error {
-	query := `INSERT OR REPLACE INTO vaults (telegram_id, encrypted_seed, salt) VALUES (?, ?, ?)`
-	_, err := db.conn.Exec(query, v.TelegramID, v.EncryptedSeed, v.Salt)
+func (db *DB) SaveAccount(a Account) error {
+	query := `INSERT OR REPLACE INTO accounts (id, type, salt, iterations) VALUES (?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, a.ID, a.Type, a.Salt, a.Iterations)
 	return err
 }
 
-func (db *DB) GetVault(telegramID int64) (*UserVault, error) {
-	query := `SELECT telegram_id, encrypted_seed, salt FROM vaults WHERE telegram_id = ?`
-	row := db.conn.QueryRow(query, telegramID)
-
-	var v UserVault
-	if err := row.Scan(&v.TelegramID, &v.EncryptedSeed, &v.Salt); err != nil {
+func (db *DB) GetAccount(id string) (*Account, error) {
+	query := `SELECT id, type, salt, iterations FROM accounts WHERE id = ?`
+	row := db.conn.QueryRow(query, id)
+	var a Account
+	if err := row.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	return &a, nil
+}
 
-	return &v, nil
+func (db *DB) GetAccountsByType(t AccountType) ([]Account, error) {
+	query := `SELECT id, type, salt, iterations FROM accounts WHERE type = ?`
+	rows, err := db.conn.Query(query, t)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accounts []Account
+	for rows.Next() {
+		var a Account
+		if err := rows.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, a)
+	}
+	return accounts, nil
+}
+
+func (db *DB) SaveWallet(w Wallet) error {
+	query := `INSERT INTO wallets (account_id, name, chain, address, encrypted_seed, salt) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, w.AccountID, w.Name, w.Chain, w.Address, w.EncryptedSeed, w.Salt)
+	return err
+}
+
+func (db *DB) GetWallets(accountID string) ([]Wallet, error) {
+	query := `SELECT id, account_id, name, chain, address, encrypted_seed, salt FROM wallets WHERE account_id = ?`
+	rows, err := db.conn.Query(query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var wallets []Wallet
+	for rows.Next() {
+		var w Wallet
+		if err := rows.Scan(&w.ID, &w.AccountID, &w.Name, &w.Chain, &w.Address, &w.EncryptedSeed, &w.Salt); err != nil {
+			return nil, err
+		}
+		wallets = append(wallets, w)
+	}
+	return wallets, nil
 }
 
 func (db *DB) SaveRules(r UserRules) error {
-	query := `INSERT OR REPLACE INTO guardrails (telegram_id, max_slippage, daily_limit, current_spend, last_reset) VALUES (?, ?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, r.TelegramID, r.MaxSlippage, r.DailyLimit, r.CurrentSpend, r.LastReset)
+	query := `INSERT OR REPLACE INTO guardrails (account_id, max_slippage, daily_limit, current_spend, last_reset) VALUES (?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, r.AccountID, r.MaxSlippage, r.DailyLimit, r.CurrentSpend, r.LastReset)
 	return err
 }
 
-func (db *DB) GetRules(telegramID int64) (*UserRules, error) {
-	query := `SELECT telegram_id, max_slippage, daily_limit, current_spend, last_reset FROM guardrails WHERE telegram_id = ?`
-	row := db.conn.QueryRow(query, telegramID)
-
+func (db *DB) GetRules(accountID string) (*UserRules, error) {
+	query := `SELECT account_id, max_slippage, daily_limit, current_spend, last_reset FROM guardrails WHERE account_id = ?`
+	row := db.conn.QueryRow(query, accountID)
 	var r UserRules
-	if err := row.Scan(&r.TelegramID, &r.MaxSlippage, &r.DailyLimit, &r.CurrentSpend, &r.LastReset); err != nil {
+	if err := row.Scan(&r.AccountID, &r.MaxSlippage, &r.DailyLimit, &r.CurrentSpend, &r.LastReset); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
-
 	return &r, nil
 }
 
