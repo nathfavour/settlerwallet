@@ -10,14 +10,22 @@ import (
 )
 
 func main() {
+	token := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if token == "" {
+		log.Println("❌ Error: TELEGRAM_BOT_TOKEN is not set.")
+		log.Println("Please set it using: export TELEGRAM_BOT_TOKEN=\"your_bot_token\"")
+		log.Println("You can get a token from @BotFather on Telegram.")
+		os.Exit(1)
+	}
+
 	pref := telebot.Settings{
-		Token:  os.Getenv("TELEGRAM_BOT_TOKEN"),
+		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
 	}
 
 	b, err := telebot.NewBot(pref)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("❌ Failed to start bot: %v", err)
 	}
 
 	// 1. Initial /start command
