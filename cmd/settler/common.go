@@ -36,6 +36,14 @@ func getDBPath() string {
 	return filepath.Join(getAppDir(), "settler.db")
 }
 
+func getPIDPath() string {
+	return filepath.Join(getAppDir(), "settler.pid")
+}
+
+func getLogPath() string {
+	return filepath.Join(getAppDir(), "settler.log")
+}
+
 func getConfigPath() string {
 	return filepath.Join(getAppDir(), "config.json")
 }
