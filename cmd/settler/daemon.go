@@ -191,6 +191,8 @@ func runDaemon() {
 	// --- State Management ---
 	type setupState struct {
 		step     int
+		action   string // "setup", "send", "limit", "slippage"
+		data     map[string]string
 		password string
 	}
 	userStates := make(map[int64]*setupState)
@@ -199,16 +201,52 @@ func runDaemon() {
 	menu := &telebot.ReplyMarkup{ResizeKeyboard: true}
 	btnWallet := menu.Text("💳 Wallet")
 	btnGuardrails := menu.Text("🛡️ Guardrails")
-	btnBack := menu.Text("⬅️ Back")
-	menu.Reply(menu.Row(btnWallet, btnGuardrails))
+	btnAgents := menu.Text("🤖 Agents")
+	btnSettings := menu.Text("⚙️ Settings")
+	menu.Reply(
+		menu.Row(btnWallet, btnGuardrails),
+		menu.Row(btnAgents, btnSettings),
+	)
 
 	walletMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
 	btnBalance := walletMenu.Text("💰 Balances")
 	btnAddress := walletMenu.Text("📍 Addresses")
-	walletMenu.Reply(walletMenu.Row(btnBalance, btnAddress), walletMenu.Row(btnBack))
+	btnSend := walletMenu.Text("💸 Send")
+	btnExport := walletMenu.Text("🔑 Export Keys")
+	btnBack := walletMenu.Text("⬅️ Back")
+	walletMenu.Reply(
+		walletMenu.Row(btnBalance, btnAddress),
+		walletMenu.Row(btnSend, btnExport),
+		walletMenu.Row(btnBack),
+	)
 
-	// --- Helper: Resolve Account ---
-	getAccountID := func(tgID int64) string {
+	guardrailMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
+	btnViewLimits := guardrailMenu.Text("📊 View Limits")
+	btnSetDaily := guardrailMenu.Text("🚫 Set Daily Limit")
+	btnSetSlippage := guardrailMenu.Text("📉 Set Slippage")
+	guardrailMenu.Reply(
+		guardrailMenu.Row(btnViewLimits),
+		guardrailMenu.Row(btnSetDaily, btnSetSlippage),
+		guardrailMenu.Row(btnBack),
+	)
+
+	agentMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
+	btnListAgents := agentMenu.Text("📋 Active Agents")
+	btnBrowseAgents := agentMenu.Text("🔍 Browse Strategies")
+	agentMenu.Reply(
+		agentMenu.Row(btnListAgents, btnBrowseAgents),
+		agentMenu.Row(btnBack),
+	)
+
+	settingsMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
+	btnSwitch := settingsMenu.Text("🔄 Switch Account")
+	btnRefresh := settingsMenu.Text("🔃 Refresh Session")
+	settingsMenu.Reply(
+		settingsMenu.Row(btnSwitch, btnRefresh),
+		settingsMenu.Row(btnBack),
+	)
+
+	// --- Helper: Resolve Account ---	getAccountID := func(tgID int64) string {
 		// Check user preference first
 		pref, _ := db.GetUserConfig(tgID, "active_account")
 		if pref != "" {
@@ -333,23 +371,92 @@ func runDaemon() {
 		if acc != nil {
 			return c.Send("⚠️ Your account is already set up.")
 		}
-		userStates[c.Sender().ID] = &setupState{step: 1}
+		userStates[c.Sender().ID] = &setupState{step: 1, action: "setup"}
 		return c.Send("🔐 Enter a password to encrypt your vault:")
 	})
-
 	b.Handle(telebot.OnText, func(c telebot.Context) error {
 		uid := c.Sender().ID
 		state, ok := userStates[uid]
 		if !ok {
 			return nil
 		}
-		if state.step == 1 {
-			state.password = c.Text()
-			state.step = 2
-			c.Delete()
-			return c.Send("✅ Password set. Send /confirm to generate your vault.")
+
+		switch state.action {
+		case "setup":
+			if state.step == 1 {
+				state.password = c.Text()
+				state.step = 2
+				c.Delete()
+				return c.Send("✅ Password set. Send /confirm to generate your vault.")
+			}
+		case "limit":
+			if state.step == 1 {
+				limit := c.Text()
+				accountID := getAccountID(uid)
+				rules, _ := db.GetRules(accountID)
+				if rules == nil {
+					rules = &persistence.UserRules{AccountID: accountID, MaxSlippage: 1.0, CurrentSpend: "0", LastReset: time.Now().Unix()}
+				}
+				rules.DailyLimit = limit
+				db.SaveRules(*rules)
+				delete(userStates, uid)
+				return c.Send(fmt.Sprintf("✅ Daily limit set to: `%s`", limit), telebot.ModeMarkdown)
+			}
+		case "send":
+			switch state.step {
+			case 1: // Selected Chain (handled via text button or typing)
+				state.data["chain"] = c.Text()
+				state.step = 2
+				return c.Send("📍 Enter destination address:")
+			case 2: // Destination Address
+				state.data["to"] = c.Text()
+				state.step = 3
+				return c.Send("💰 Enter amount to send (in native units):")
+			case 3: // Amount
+				state.data["amount"] = c.Text()
+				state.step = 4
+				c.Delete()
+				return c.Send("🔐 Enter vault password to sign transaction:")
+			case 4: // Password & Execution
+				state.password = c.Text()
+				c.Delete()
+				// TODO: Logic for signing and broadcasting
+				delete(userStates, uid)
+				return c.Send("⏳ Transaction processing... (Signing implementation in progress)")
+			}
 		}
 		return nil
+	})
+
+	b.Handle(&btnSend, func(c telebot.Context) error {
+		uid := c.Sender().ID
+		userStates[uid] = &setupState{step: 1, action: "send", data: make(map[string]string)}
+		
+		chainMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
+		chainMenu.Reply(chainMenu.Row(chainMenu.Text("BNB"), chainMenu.Text("Solana")))
+		return c.Send("🚀 **New Transfer**\nSelect target chain:", chainMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnSetDaily, func(c telebot.Context) error {
+		uid := c.Sender().ID
+		userStates[uid] = &setupState{step: 1, action: "limit"}
+		return c.Send("🚫 **Set Daily Spend Limit**\nEnter limit in wei/lamports:")
+	})
+
+	b.Handle(&btnExport, func(c telebot.Context) error {
+		return c.Send("⚠️ **High Security Action**\nTo export your keys, run `settlerwallet export` from your secure CLI terminal. This action is restricted from the mobile bot for your safety.")
+	})
+
+	b.Handle(&btnListAgents, func(c telebot.Context) error {
+		return c.Send("🤖 **Active Agents**\n0 active goroutines for this account.")
+	})
+
+	b.Handle(&btnBrowseAgents, func(c telebot.Context) error {
+		return c.Send("🔍 **Available Strategies**\n\n1. `Auto-Compounder` - BSC Yield Aggregator (Coming Soon)\n2. `Stop-Loss` - DEX protection loop")
+	})
+
+	b.Handle(&btnRefresh, func(c telebot.Context) error {
+		return c.Send("✅ Session refreshed.")
 	})
 
 	b.Handle("/confirm", func(c telebot.Context) error {
@@ -407,7 +514,38 @@ func runDaemon() {
 	})
 
 	b.Handle(&btnWallet, func(c telebot.Context) error {
-		return c.Send("Wallet Menu:", walletMenu)
+		return c.Send("💳 **Wallet Management**\nManage your accounts and assets.", walletMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnGuardrails, func(c telebot.Context) error {
+		return c.Send("🛡️ **Guardrail Engine**\nRisk management and spend limits.", guardrailMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnAgents, func(c telebot.Context) error {
+		return c.Send("🤖 **Strategy Agents**\nAutonomous financial goroutines.", agentMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnSettings, func(c telebot.Context) error {
+		return c.Send("⚙️ **Settings**\nSystem configuration and account switching.", settingsMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnViewLimits, func(c telebot.Context) error {
+		accountID := getAccountID(c.Sender().ID)
+		rules, _ := db.GetRules(accountID)
+		if rules == nil {
+			return c.Send("ℹ️ No guardrails set for this account. Using defaults (1.0% slippage, 1 ETH/BNB limit).")
+		}
+		msg := fmt.Sprintf("📊 **Guardrail Status**\n\nDaily Limit: `%s` wei/lam\nCurrent Spend: `%s`\nMax Slippage: `%.1f%%`", 
+			rules.DailyLimit, rules.CurrentSpend, rules.MaxSlippage)
+		return c.Send(msg, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnBack, func(c telebot.Context) error {
+		return c.Send("🏠 **Main Menu**", menu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnSwitch, func(c telebot.Context) error {
+		return c.Send("To switch accounts, please use the `/switch` command.")
 	})
 
 	b.Handle(&btnAddress, func(c telebot.Context) error {
