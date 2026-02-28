@@ -31,11 +31,25 @@ var daemonCmd = &cobra.Command{
 			log.Fatal("❌ Error: SERVER_SECRET is not set (used for vault encryption).")
 		}
 
-		db, err := persistence.NewDB("settler.db")
+		finalDBPath := dbPath
+		if finalDBPath == "" {
+			configDir, err := os.UserConfigDir()
+			if err != nil {
+				log.Fatalf("❌ Failed to get config directory: %v", err)
+			}
+			appDir := fmt.Sprintf("%s/settlerwallet", configDir)
+			if err := os.MkdirAll(appDir, 0700); err != nil {
+				log.Fatalf("❌ Failed to create config directory: %v", err)
+			}
+			finalDBPath = fmt.Sprintf("%s/settler.db", appDir)
+		}
+
+		db, err := persistence.NewDB(finalDBPath)
 		if err != nil {
-			log.Fatalf("❌ Failed to initialize database: %v", err)
+			log.Fatalf("❌ Failed to initialize database at %s: %v", finalDBPath, err)
 		}
 		defer db.Close()
+		log.Printf("📂 Database initialized at: %s", finalDBPath)
 
 		pref := telebot.Settings{
 			Token:  token,
