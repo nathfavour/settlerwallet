@@ -2,15 +2,30 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/nathfavour/settlerwallet/internal/persistence"
+	"golang.org/x/term"
 )
 
 type Config struct {
 	ActiveAccount string `json:"active_account"`
 }
+
+func readPassword(prompt string) string {
+	fmt.Print(prompt)
+	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		log.Fatalf("❌ Error reading password: %v", err)
+	}
+	fmt.Println()
+	return string(bytePassword)
+}
+
 
 func getAppDir() string {
 	configDir, _ := os.UserConfigDir()

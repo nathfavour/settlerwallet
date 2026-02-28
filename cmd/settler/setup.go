@@ -6,12 +6,10 @@ import (
 	"io"
 	"log"
 	"strings"
-	"syscall"
 
 	"github.com/nathfavour/settlerwallet/internal/persistence"
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func init() {
@@ -145,14 +143,4 @@ var setupCmd = &cobra.Command{
 		fmt.Printf("\n⚠️  Account '%s' is ready. To back up your recovery phrase securely, run:\n", name)
 		fmt.Printf("   settler export -n %s --phrase\n", name)
 	},
-}
-
-func readPassword(prompt string) string {
-	fmt.Print(prompt)
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		log.Fatalf("❌ Error reading password: %v", err)
-	}
-	fmt.Println()
-	return string(bytePassword)
 }
