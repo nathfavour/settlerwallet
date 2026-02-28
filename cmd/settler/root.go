@@ -14,7 +14,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "settlerengine",
+	Use:   "settlerwallet",
 	Short: "settlerWallet: Your agentic financial partner.",
 	Long: `settlerWallet is a multi-chain, agentic wallet that helps you manage assets
 and run strategies on BNB and Solana.`,

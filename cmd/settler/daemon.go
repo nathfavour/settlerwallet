@@ -218,7 +218,7 @@ func runDaemon() {
 		accountID := getAccountID(uid)
 		acc, _ := db.GetAccount(accountID)
 		if acc == nil {
-			return c.Send("Welcome! You don't have an account yet. Send /setup to create one or link a local account using `settlerengine link` from your CLI.", menu)
+			return c.Send("Welcome! You don't have an account yet. Send /setup to create one or link a local account using `settlerwallet link` from your CLI.", menu)
 		}
 
 		welcomeMsg := "Welcome back!"
