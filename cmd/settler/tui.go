@@ -96,11 +96,17 @@ func (k keyMap) FullHelp() [][]key.Binding {
 }
 
 // --- Model ---
+type tokenData struct {
+	Symbol  string
+	Balance string
+}
+
 type walletData struct {
 	Name    string
 	Chain   string
 	Address string
 	Balance string
+	Tokens  []tokenData
 }
 
 type settlerModel struct {
@@ -160,20 +166,40 @@ func (m settlerModel) fetchData() tea.Msg {
 	wallets, _ := db.GetWallets(accountID)
 
 	var results []walletData
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	for _, w := range wallets {
-		balStr := "..."
+		var balStr string
+		var tokens []tokenData
+
 		if w.Chain == "BNB" {
 			b, err := m.bnbClient.GetBalance(ctx, w.Address)
 			if err == nil {
 				balStr = utils.FormatBalance(b.Amount, 18) + " BNB"
 			}
+			tbs, err := m.bnbClient.GetTokenBalances(ctx, w.Address)
+			if err == nil {
+				for _, tb := range tbs {
+					tokens = append(tokens, tokenData{
+						Symbol:  tb.Symbol,
+						Balance: utils.FormatBalance(tb.Amount, tb.Decimals) + " " + tb.Symbol,
+					})
+				}
+			}
 		} else if w.Chain == "SOL" {
 			b, err := m.solClient.GetBalance(ctx, w.Address)
 			if err == nil {
 				balStr = utils.FormatBalance(b.Amount, 9) + " SOL"
+			}
+			tbs, err := m.solClient.GetTokenBalances(ctx, w.Address)
+			if err == nil {
+				for _, tb := range tbs {
+					tokens = append(tokens, tokenData{
+						Symbol:  tb.Symbol,
+						Balance: utils.FormatBalance(tb.Amount, tb.Decimals) + " " + tb.Symbol,
+					})
+				}
 			}
 		}
 
@@ -182,6 +208,7 @@ func (m settlerModel) fetchData() tea.Msg {
 			Chain:   w.Chain,
 			Address: w.Address,
 			Balance: balStr,
+			Tokens:  tokens,
 		})
 	}
 	return balanceUpdateMsg(results)
@@ -289,6 +316,18 @@ func (m settlerModel) renderOverview() string {
 		content.WriteString(headerStyle.Render(w.Name) + "\n")
 		content.WriteString(balStyle.Render(w.Balance) + "\n")
 		content.WriteString(addrStyle.Render(w.Address[:12] + "..." + w.Address[len(w.Address)-8:]))
+		
+		if len(w.Tokens) > 0 {
+			content.WriteString("\n" + subtleColor.Render("Tokens:") + "\n")
+			for i, t := range w.Tokens {
+				if i >= 3 {
+					content.WriteString(subtleColor.Render(fmt.Sprintf("... +%d more", len(w.Tokens)-3)))
+					break
+				}
+				content.WriteString(fmt.Sprintf("• %s\n", t.Balance))
+			}
+		}
+
 		boxes = append(boxes, boxStyle.Render(content.String()))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, boxes...)
@@ -302,7 +341,15 @@ func (m settlerModel) renderChain(chain string) string {
 			found = true
 			body.WriteString(headerStyle.Render(fmt.Sprintf("Wallet: %s", w.Name)) + "\n")
 			body.WriteString(fmt.Sprintf("Address: %s\n", w.Address))
-			body.WriteString(fmt.Sprintf("Balance: %s\n\n", balStyle.Render(w.Balance)))
+			body.WriteString(fmt.Sprintf("Native: %s\n", balStyle.Render(w.Balance)))
+			
+			if len(w.Tokens) > 0 {
+				body.WriteString("\n" + headerStyle.Render("Tokens:") + "\n")
+				for _, t := range w.Tokens {
+					body.WriteString(fmt.Sprintf("  - %s\n", t.Balance))
+				}
+			}
+			body.WriteString("\n")
 		}
 	}
 	if !found {
