@@ -22,12 +22,14 @@ import (
 )
 
 var foregroundFlag bool
+var killFlag bool
 
 func init() {
 	daemonCmd.AddCommand(daemonStartCmd)
 	daemonCmd.AddCommand(daemonStopCmd)
 	daemonCmd.AddCommand(daemonStatusCmd)
 	daemonCmd.Flags().BoolVarP(&foregroundFlag, "foreground", "f", false, "Run daemon in foreground")
+	daemonCmd.Flags().BoolVarP(&killFlag, "kill", "k", false, "Kill the running background daemon")
 	daemonCmd.Flags().MarkHidden("foreground")
 	rootCmd.AddCommand(daemonCmd)
 }
@@ -36,6 +38,10 @@ var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Starts the settlerWallet daemon (Telegram Bot).",
 	Run: func(cmd *cobra.Command, args []string) {
+		if killFlag {
+			daemonStopCmd.Run(cmd, args)
+			return
+		}
 		if !foregroundFlag {
 			fmt.Println("ℹ️  To run in background, use 'settler daemon start'.")
 			fmt.Println("ℹ️  To run in foreground for debugging, use 'settler daemon -f'.")

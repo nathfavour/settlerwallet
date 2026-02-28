@@ -28,6 +28,21 @@ and run strategies on BNB and Solana.`,
 func init() {
 	rootCmd.PersistentFlags().StringVar(&dbPath, "db", "", "Database path (default is ~/.config/settlerwallet/settler.db)")
 	rootCmd.PersistentFlags().StringVarP(&accountNameFlag, "name", "n", "", "Account name to use (default from config)")
+	settlerEngineCmd.Flags().BoolVarP(&killFlag, "kill", "k", false, "Kill the running background daemon")
+	rootCmd.AddCommand(settlerEngineCmd)
+}
+
+var settlerEngineCmd = &cobra.Command{
+	Use:     "settlerengine",
+	Aliases: []string{"engine"},
+	Short:   "Alias for 'daemon start' to launch the agent engine.",
+	Run: func(cmd *cobra.Command, args []string) {
+		if killFlag {
+			daemonStopCmd.Run(cmd, args)
+			return
+		}
+		daemonStartCmd.Run(cmd, args)
+	},
 }
 
 func Execute() {
