@@ -19,6 +19,14 @@ type Account struct {
 	Type       AccountType
 	Salt       []byte
 	Iterations int
+	LinkedTGID int64 // Telegram UID linked to this local account
+}
+
+type LinkRequest struct {
+	AccountID string
+	TGID      int64
+	Code      string
+	ExpiresAt int64
 }
 
 type Wallet struct {
@@ -54,7 +62,14 @@ func NewDB(path string) (*DB, error) {
 			id TEXT PRIMARY KEY,
 			type TEXT,
 			salt BLOB,
-			iterations INTEGER
+			iterations INTEGER,
+			linked_tg_id INTEGER UNIQUE
+		);`,
+		`CREATE TABLE IF NOT EXISTS link_requests (
+			account_id TEXT PRIMARY KEY,
+			tg_id INTEGER,
+			code TEXT,
+			expires_at INTEGER
 		);`,
 		`CREATE TABLE IF NOT EXISTS wallets (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,26 +105,89 @@ func NewDB(path string) (*DB, error) {
 }
 
 func (db *DB) SaveAccount(a Account) error {
-	query := `INSERT OR REPLACE INTO accounts (id, type, salt, iterations) VALUES (?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, a.ID, a.Type, a.Salt, a.Iterations)
+	var linkedID interface{}
+	if a.LinkedTGID != 0 {
+		linkedID = a.LinkedTGID
+	}
+	query := `INSERT OR REPLACE INTO accounts (id, type, salt, iterations, linked_tg_id) VALUES (?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, a.ID, a.Type, a.Salt, a.Iterations, linkedID)
 	return err
 }
 
 func (db *DB) GetAccount(id string) (*Account, error) {
-	query := `SELECT id, type, salt, iterations FROM accounts WHERE id = ?`
+	query := `SELECT id, type, salt, iterations, linked_tg_id FROM accounts WHERE id = ?`
 	row := db.conn.QueryRow(query, id)
 	var a Account
-	if err := row.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations); err != nil {
+	var linkedID sql.NullInt64
+	if err := row.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations, &linkedID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	if linkedID.Valid {
+		a.LinkedTGID = linkedID.Int64
+	}
 	return &a, nil
 }
 
+func (db *DB) GetAccountByLinkedTGID(tgID int64) (*Account, error) {
+	query := `SELECT id, type, salt, iterations, linked_tg_id FROM accounts WHERE linked_tg_id = ?`
+	row := db.conn.QueryRow(query, tgID)
+	var a Account
+	var linkedID sql.NullInt64
+	if err := row.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations, &linkedID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if linkedID.Valid {
+		a.LinkedTGID = linkedID.Int64
+	}
+	return &a, nil
+}
+
+func (db *DB) CreateLinkRequest(lr LinkRequest) error {
+	query := `INSERT OR REPLACE INTO link_requests (account_id, tg_id, code, expires_at) VALUES (?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, lr.AccountID, lr.TGID, lr.Code, lr.ExpiresAt)
+	return err
+}
+
+func (db *DB) GetLinkRequest(accountID string) (*LinkRequest, error) {
+	query := `SELECT account_id, tg_id, code, expires_at FROM link_requests WHERE account_id = ?`
+	row := db.conn.QueryRow(query, accountID)
+	var lr LinkRequest
+	if err := row.Scan(&lr.AccountID, &lr.TGID, &lr.Code, &lr.ExpiresAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &lr, nil
+}
+
+func (db *DB) GetLinkRequestByTGID(tgID int64) (*LinkRequest, error) {
+	query := `SELECT account_id, tg_id, code, expires_at FROM link_requests WHERE tg_id = ?`
+	row := db.conn.QueryRow(query, tgID)
+	var lr LinkRequest
+	if err := row.Scan(&lr.AccountID, &lr.TGID, &lr.Code, &lr.ExpiresAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &lr, nil
+}
+
+func (db *DB) DeleteLinkRequest(accountID string) error {
+	query := `DELETE FROM link_requests WHERE account_id = ?`
+	_, err := db.conn.Exec(query, accountID)
+	return err
+}
+
 func (db *DB) GetAccountsByType(t AccountType) ([]Account, error) {
-	query := `SELECT id, type, salt, iterations FROM accounts WHERE type = ?`
+	query := `SELECT id, type, salt, iterations, linked_tg_id FROM accounts WHERE type = ?`
 	rows, err := db.conn.Query(query, t)
 	if err != nil {
 		return nil, err
@@ -119,8 +197,12 @@ func (db *DB) GetAccountsByType(t AccountType) ([]Account, error) {
 	var accounts []Account
 	for rows.Next() {
 		var a Account
-		if err := rows.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations); err != nil {
+		var linkedID sql.NullInt64
+		if err := rows.Scan(&a.ID, &a.Type, &a.Salt, &a.Iterations, &linkedID); err != nil {
 			return nil, err
+		}
+		if linkedID.Valid {
+			a.LinkedTGID = linkedID.Int64
 		}
 		accounts = append(accounts, a)
 	}
