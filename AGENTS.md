@@ -40,4 +40,7 @@ func clearBytes(b []byte) {
     }
 }
 ```
-Always call `runtime.GC()` or manual zeroing for sensitive memory management.
+## 7. Build Instructions
+- Always build binaries into the `bin/` directory to prevent workspace clutter and git pollution.
+- Example: `go build -o bin/daemon ./cmd/daemon`
+- The `bin/` directory is ignored by git.
