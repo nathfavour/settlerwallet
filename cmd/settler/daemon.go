@@ -26,16 +26,24 @@ var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Starts the settlerWallet daemon (Telegram Bot).",
 	Run: func(cmd *cobra.Command, args []string) {
-		token := os.Getenv("TELEGRAM_BOT_TOKEN")
-		if token == "" {
-			log.Fatal("❌ Error: TELEGRAM_BOT_TOKEN is not set.")
-		}
-
 		db, err := initDB()
 		if err != nil {
 			log.Fatalf("❌ Failed to initialize database: %v", err)
 		}
 		defer db.Close()
+
+		// Get token from DB, fallback to environment variable
+		token, _ := db.GetConfig("telegram_token")
+		if token == "" {
+			token = os.Getenv("TELEGRAM_BOT_TOKEN")
+		}
+
+		if token == "" {
+			fmt.Println("❌ Error: Telegram bot token not found.")
+			fmt.Println("Please run: ./settlerwallet bot set-token <token>")
+			fmt.Println("OR set the environment variable: export TELEGRAM_BOT_TOKEN=\"your_token\"")
+			os.Exit(1)
+		}
 
 		engine := guardrail.NewEngine(db)
 

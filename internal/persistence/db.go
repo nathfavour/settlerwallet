@@ -74,6 +74,10 @@ func NewDB(path string) (*DB, error) {
 			last_reset INTEGER,
 			FOREIGN KEY(account_id) REFERENCES accounts(id)
 		);`,
+		`CREATE TABLE IF NOT EXISTS config (
+			key TEXT PRIMARY KEY,
+			value TEXT
+		);`,
 	}
 
 	for _, query := range queries {
@@ -165,6 +169,25 @@ func (db *DB) GetRules(accountID string) (*UserRules, error) {
 		return nil, err
 	}
 	return &r, nil
+}
+
+func (db *DB) SetConfig(key, value string) error {
+	query := `INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)`
+	_, err := db.conn.Exec(query, key, value)
+	return err
+}
+
+func (db *DB) GetConfig(key string) (string, error) {
+	query := `SELECT value FROM config WHERE key = ?`
+	row := db.conn.QueryRow(query, key)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	return value, nil
 }
 
 func (db *DB) Close() error {
