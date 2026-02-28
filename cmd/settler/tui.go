@@ -48,7 +48,6 @@ type tuiModel struct {
 	Mnemonic   string
 	BNBClient  *blockchain.BNBClient
 	SOLClient  *blockchain.SolanaClient
-	Error      string
 }
 
 func initialTuiModel(mnemonic string) tuiModel {
@@ -58,22 +57,13 @@ func initialTuiModel(mnemonic string) tuiModel {
 	}
 
 	if mnemonic != "" {
-		serverSecret := os.Getenv("SERVER_SECRET")
-		if serverSecret == "" {
-			serverSecret = "local-dev-secret"
-		}
-		localID := "local-user"
-
-		v, err := vault.NewVault(mnemonic, localID, serverSecret)
-		if err == nil {
-			bnbAcc, _ := v.DeriveAccount(localID, serverSecret, vault.ChainBNB, 0)
-			solAcc, _ := v.DeriveAccount(localID, serverSecret, vault.ChainSolana, 0)
-			m.AddressBNB = bnbAcc.Address
-			m.AddressSOL = solAcc.Address
-		}
+		seed := vault.GetSeedFromMnemonic(mnemonic)
+		_, bnbAcc, _ := vault.DerivePrivateKey(seed, vault.ChainBNB, 0)
+		_, solAcc, _ := vault.DerivePrivateKey(seed, vault.ChainSolana, 0)
+		m.AddressBNB = bnbAcc
+		m.AddressSOL = solAcc
 	}
 
-	// Initialize clients (placeholders/defaults)
 	m.BNBClient, _ = blockchain.NewBNBClient("https://bsc-dataseed.binance.org")
 	m.SOLClient, _ = blockchain.NewSolanaClient("https://api.mainnet-beta.solana.com")
 
@@ -152,7 +142,6 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m tuiModel) View() string {
 	doc := strings.Builder{}
 
-	// Tabs
 	var renderedTabs []string
 	for i, t := range m.Tabs {
 		var style lipgloss.Style
@@ -169,34 +158,22 @@ func (m tuiModel) View() string {
 	doc.WriteString(row)
 	doc.WriteString("\n\n")
 
-	// Content based on active tab
 	switch m.ActiveTab {
-	case 0: // Dashboard
+	case 0:
 		doc.WriteString(lipgloss.NewStyle().Bold(true).Render("Welcome to settlerWallet") + "\n\n")
-		doc.WriteString("Your multi-chain agentic partner is online.\n")
-		if m.Mnemonic == "" {
-			doc.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("⚠️  No mnemonic provided. Showing placeholders.") + "\n")
-		}
-		doc.WriteString("\n")
 		doc.WriteString(fmt.Sprintf("BNB Balance: %s\n", lipgloss.NewStyle().Foreground(highlight).Render(m.BalanceBNB)))
 		doc.WriteString(fmt.Sprintf("SOL Balance: %s\n", lipgloss.NewStyle().Foreground(highlight).Render(m.BalanceSOL)))
-	case 1: // BNB
-		doc.WriteString(lipgloss.NewStyle().Foreground(highlight).Render("BNB Smart Chain") + "\n\n")
-		doc.WriteString(fmt.Sprintf("Address: %s\n", m.AddressBNB))
+	case 1:
+		doc.WriteString(fmt.Sprintf("BNB Address: %s\n", m.AddressBNB))
 		doc.WriteString(fmt.Sprintf("Balance: %s\n", m.BalanceBNB))
-	case 2: // Solana
-		doc.WriteString(lipgloss.NewStyle().Foreground(highlight).Render("Solana") + "\n\n")
-		doc.WriteString(fmt.Sprintf("Address: %s\n", m.AddressSOL))
+	case 2:
+		doc.WriteString(fmt.Sprintf("Solana Address: %s\n", m.AddressSOL))
 		doc.WriteString(fmt.Sprintf("Balance: %s\n", m.BalanceSOL))
-	case 3: // Settings
-		doc.WriteString("Settings\n\n")
-		doc.WriteString("RPC Nodes:\n")
-		doc.WriteString("  BNB: " + url("https://bsc-dataseed.binance.org") + "\n")
-		doc.WriteString("  SOL: " + url("https://api.mainnet-beta.solana.com") + "\n")
+	case 3:
+		doc.WriteString("Settings\n\nRPC Nodes Connected.")
 	}
 
 	doc.WriteString("\n\n" + helpStyle.Render("q: quit • h/l: switch tabs • r: refresh"))
-
 	return docStyle.Render(doc.String())
 }
 
@@ -211,8 +188,7 @@ var tuiCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		p := tea.NewProgram(initialTuiModel(mnemonicInput), tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
-			fmt.Printf("Error starting TUI: %v", err)
-			os.Exit(1)
+			log.Fatalf("Error starting TUI: %v", err)
 		}
 	},
 }

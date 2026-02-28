@@ -6,10 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nathfavour/settlerwallet/internal/blockchain"
@@ -52,7 +49,7 @@ var daemonCmd = &cobra.Command{
 			log.Fatalf("❌ Failed to start bot: %v", err)
 		}
 
-		// --- State Management (Simple In-Memory for Password Flow) ---
+		// --- State Management ---
 		type setupState struct {
 			step     int
 			password string
@@ -65,37 +62,31 @@ var daemonCmd = &cobra.Command{
 		btnGuardrails := menu.Text("🛡️ Guardrails")
 		btnBack := menu.Text("⬅️ Back")
 
-		menu.Reply(
-			menu.Row(btnWallet, btnGuardrails),
-		)
+		menu.Reply(menu.Row(btnWallet, btnGuardrails))
 
 		walletMenu := &telebot.ReplyMarkup{ResizeKeyboard: true}
 		btnBalance := walletMenu.Text("💰 Balances")
 		btnAddress := walletMenu.Text("📍 Addresses")
-		btnNewWallet := walletMenu.Text("🆕 New Wallet")
 
 		walletMenu.Reply(
 			walletMenu.Row(btnBalance, btnAddress),
-			walletMenu.Row(btnNewWallet, btnBack),
+			walletMenu.Row(btnBack),
 		)
 
 		// --- Handlers ---
-
 		b.Handle("/start", func(c telebot.Context) error {
-			return c.Send("Welcome to settlerWallet. Your secure multi-chain partner.\n\nSend /setup to begin.", menu)
+			return c.Send("Welcome to settlerWallet. Secure multi-chain partner.\n\nSend /setup to begin.", menu)
 		})
 
 		b.Handle("/setup", func(c telebot.Context) error {
 			uid := c.Sender().ID
 			accountID := fmt.Sprintf("tg:%d", uid)
 			acc, _ := db.GetAccount(accountID)
-
 			if acc != nil {
-				return c.Send("⚠️ Your account is already set up. Use the menu to manage wallets.")
+				return c.Send("⚠️ Already set up.")
 			}
-
 			userStates[uid] = &setupState{step: 1}
-			return c.Send("🔐 Account Setup: Please enter a password to encrypt your vault. (This will be deleted from history once used)")
+			return c.Send("🔐 Enter a password to encrypt your vault:")
 		})
 
 		b.Handle(telebot.OnText, func(c telebot.Context) error {
@@ -104,14 +95,11 @@ var daemonCmd = &cobra.Command{
 			if !ok {
 				return nil
 			}
-
-			switch state.step {
-			case 1:
+			if state.step == 1 {
 				state.password = c.Text()
 				state.step = 2
-				// Delete user message for security if possible
 				c.Delete()
-				return c.Send("✅ Password received. Send /confirm to proceed with generating your vault.")
+				return c.Send("✅ Password set. Send /confirm to generate your vault.")
 			}
 			return nil
 		})
@@ -120,7 +108,7 @@ var daemonCmd = &cobra.Command{
 			uid := c.Sender().ID
 			state, ok := userStates[uid]
 			if !ok || state.step != 2 {
-				return c.Send("❌ Error: No pending setup. Send /setup first.")
+				return c.Send("❌ No pending setup.")
 			}
 
 			accountID := fmt.Sprintf("tg:%d", uid)
@@ -144,16 +132,24 @@ var daemonCmd = &cobra.Command{
 
 			db.SaveWallet(persistence.Wallet{
 				AccountID:     accountID,
-				Name:          "Primary BNB",
+				Name:          "BNB Main",
 				Chain:         string(vault.ChainBNB),
 				Address:       bnbAddr,
 				EncryptedSeed: encryptedSeed,
 				Salt:          make([]byte, 12),
 			})
 
+			db.SaveWallet(persistence.Wallet{
+				AccountID:     accountID,
+				Name:          "Solana Main",
+				Chain:         string(vault.ChainSolana),
+				Address:       solAddr,
+				EncryptedSeed: encryptedSeed,
+				Salt:          make([]byte, 12),
+			})
+
 			delete(userStates, uid)
-			c.Send("✅ Vault Created and Sandboxed!")
-			return c.Send(fmt.Sprintf("Your Mnemonic (SAVE THIS!): \n\n`%s`", mnemonic), telebot.ModeMarkdown)
+			return c.Send(fmt.Sprintf("✅ Vault Created!\n\nMnemonic: `%s`", mnemonic), telebot.ModeMarkdown)
 		})
 
 		b.Handle(&btnWallet, func(c telebot.Context) error {
@@ -162,39 +158,35 @@ var daemonCmd = &cobra.Command{
 
 		b.Handle(&btnAddress, func(c telebot.Context) error {
 			uid := c.Sender().ID
-			accountID := fmt.Sprintf("tg:%d", uid)
-			wallets, err := db.GetWallets(accountID)
-			if err != nil || len(wallets) == 0 {
-				return c.Send("❌ No wallets found. Send /setup first.")
+			wallets, _ := db.GetWallets(fmt.Sprintf("tg:%d", uid))
+			if len(wallets) == 0 {
+				return c.Send("❌ No wallets.")
 			}
-
-			msg := "📍 Your Addresses:\n\n"
+			msg := "📍 Addresses:\n"
 			for _, w := range wallets {
-				msg += fmt.Sprintf("%s (%s): `%s`\n", w.Name, w.Chain, w.Address)
+				msg += fmt.Sprintf("- %s: `%s`\n", w.Name, w.Address)
 			}
 			return c.Send(msg, telebot.ModeMarkdown)
 		})
 
 		b.Handle(&btnBalance, func(c telebot.Context) error {
 			uid := c.Sender().ID
-			accountID := fmt.Sprintf("tg:%d", uid)
-			wallets, _ := db.GetWallets(accountID)
+			wallets, _ := db.GetWallets(fmt.Sprintf("tg:%d", uid))
 			if len(wallets) == 0 {
-				return c.Send("❌ No wallets found.")
+				return c.Send("❌ No wallets.")
 			}
 
 			bnbClient, _ := blockchain.NewBNBClient("https://bsc-dataseed.binance.org")
 			solClient, _ := blockchain.NewSolanaClient("https://api.mainnet-beta.solana.com")
-			ctx := context.Background()
-
-			msg := "💰 Balances:\n\n"
+			
+			msg := "💰 Balances:\n"
 			for _, w := range wallets {
 				var balStr string
 				if w.Chain == string(vault.ChainBNB) {
-					b, _ := bnbClient.GetBalance(ctx, w.Address)
+					b, _ := bnbClient.GetBalance(context.Background(), w.Address)
 					balStr = utils.FormatBalance(b.Amount, 18) + " BNB"
 				} else {
-					b, _ := solClient.GetBalance(ctx, w.Address)
+					b, _ := solClient.GetBalance(context.Background(), w.Address)
 					balStr = utils.FormatBalance(b.Amount, 9) + " SOL"
 				}
 				msg += fmt.Sprintf("- %s: `%s`\n", w.Name, balStr)
@@ -206,7 +198,7 @@ var daemonCmd = &cobra.Command{
 			return c.Send("Main Menu:", menu)
 		})
 
-		log.Println("settlerWallet daemon starting...")
+		log.Printf("settlerWallet daemon starting (Engine: %p)...", engine)
 		b.Start()
 	},
 }
