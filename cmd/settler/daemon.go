@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/nathfavour/settlerwallet/internal/guardrail"
 	"github.com/nathfavour/settlerwallet/internal/persistence"
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"github.com/spf13/cobra"
@@ -51,6 +53,8 @@ var daemonCmd = &cobra.Command{
 		defer db.Close()
 		log.Printf("📂 Database initialized at: %s", finalDBPath)
 
+		engine := guardrail.NewEngine(db)
+
 		pref := telebot.Settings{
 			Token:  token,
 			Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
@@ -67,6 +71,7 @@ var daemonCmd = &cobra.Command{
 				"Commands:\n" +
 				"/setup - Create a new wallet\n" +
 				"/address - Show your addresses\n" +
+				"/limit <amount> - Set daily spend limit (in native units)\n" +
 				"/balance - Check balances (WIP)")
 		})
 
@@ -125,6 +130,29 @@ var daemonCmd = &cobra.Command{
 			}
 
 			return c.Send(fmt.Sprintf("📍 Your Addresses:\n\nBNB: `%s`\nSolana: `%s`", bnbAcc.Address, solAcc.Address), telebot.ModeMarkdown)
+		})
+
+		// 4. Limit command
+		b.Handle("/limit", func(c telebot.Context) error {
+			args := c.Args()
+			if len(args) == 0 {
+				return c.Send("Usage: /limit <amount_in_native_units>")
+			}
+
+			amountFloat, err := strconv.ParseFloat(args[0], 64)
+			if err != nil {
+				return c.Send("Invalid amount. Please provide a number.")
+			}
+
+			// Convert to 1e18 (Simplified for BNB/ETH native)
+			limit := new(big.Int)
+			new(big.Float).Mul(big.NewFloat(amountFloat), big.NewFloat(1e18)).Int(limit)
+
+			if err := engine.SetLimit(c.Sender().ID, limit); err != nil {
+				return c.Send("Error setting limit: " + err.Error())
+			}
+
+			return c.Send(fmt.Sprintf("✅ Daily spend limit set to %s units.", args[0]))
 		})
 
 		log.Println("settlerWallet daemon starting...")
