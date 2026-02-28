@@ -58,14 +58,12 @@ func (n *Nexus) StartUserAgent(telegramID string, v *vault.Vault) {
 }
 
 func (n *Nexus) runAgentLoop(agent *UserAgent) {
-	fmt.Printf("Starting agent loop for user %s
-", agent.TelegramID)
+	fmt.Printf("Starting agent loop for user %s\n", agent.TelegramID)
 	// In the future, this loop will listen for triggers and run strategies.
 	for {
 		select {
 		case <-agent.Ctx.Done():
-			fmt.Printf("Stopping agent loop for user %s
-", agent.TelegramID)
+			fmt.Printf("Stopping agent loop for user %s\n", agent.TelegramID)
 			return
 		}
 	}

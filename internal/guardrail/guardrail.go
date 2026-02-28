@@ -3,7 +3,6 @@ package guardrail
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 
