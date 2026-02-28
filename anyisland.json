@@ -1,0 +1,17 @@
+{
+  "name": "settlerwallet",
+  "version": "0.1.0",
+  "description": "A high-performance, multi-tenant Agentic Wallet daemon written in Go.",
+  "repository": "github.com/nathfavour/settlerwallet",
+  "build": {
+    "toolchain": "go",
+    "steps": [
+      "go build -v -o bin/daemon ./cmd/daemon"
+    ],
+    "bin": "bin/daemon"
+  },
+  "runtime": {
+    "daemon": true,
+    "pulse": false
+  }
+}
