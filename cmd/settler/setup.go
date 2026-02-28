@@ -140,8 +140,8 @@ var setupCmd = &cobra.Command{
 		fmt.Println("\n✅ Wallets successfully created and sandboxed!")
 		fmt.Printf("BNB:     %s\n", bnbAddr)
 		fmt.Printf("Solana:  %s\n", solAddr)
-		fmt.Println("\n⚠️  SAVE THIS MNEMONIC (IT IS YOUR ONLY BACKUP):")
-		fmt.Printf("\033[1;33m%s\033[0m\n", mnemonic)
+		fmt.Printf("\n⚠️  Account '%s' is ready. To back up your recovery phrase securely, run:\n", name)
+		fmt.Printf("   settler export -n %s --phrase\n", name)
 	},
 }
 
