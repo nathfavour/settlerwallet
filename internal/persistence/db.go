@@ -272,6 +272,16 @@ func (db *DB) GetConfig(key string) (string, error) {
 	return value, nil
 }
 
+func (db *DB) SetUserConfig(tgID int64, key, value string) error {
+	fullKey := fmt.Sprintf("user:%d:%s", tgID, key)
+	return db.SetConfig(fullKey, value)
+}
+
+func (db *DB) GetUserConfig(tgID int64, key string) (string, error) {
+	fullKey := fmt.Sprintf("user:%d:%s", tgID, key)
+	return db.GetConfig(fullKey)
+}
+
 func (db *DB) Close() error {
 	return db.conn.Close()
 }

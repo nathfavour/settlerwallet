@@ -59,24 +59,10 @@ var linkCmd = &cobra.Command{
 		}
 
 		fmt.Printf("🚀 Link request initiated for account '%s' to TG ID %d.\n", accountName, tgID)
-		fmt.Println("1. Ensure your Telegram Bot is running (./settlerwallet daemon).")
-		fmt.Println("2. Send /start to the bot from the specified Telegram account.")
-		fmt.Println("3. The bot will send you a verification code.")
-		fmt.Print("\nPaste the verification code here: ")
-
-		var inputCode string
-		fmt.Scanln(&inputCode)
-
-		if inputCode == code {
-			acc.LinkedTGID = tgID
-			if err := db.SaveAccount(*acc); err != nil {
-				log.Fatalf("❌ Error saving linked account: %v", err)
-			}
-			db.DeleteLinkRequest(accountID)
-			fmt.Println("✅ Success! Account linked and sandboxed.")
-		} else {
-			fmt.Println("❌ Error: Invalid verification code.")
-		}
+		fmt.Println("\nNext Steps:")
+		fmt.Println("1. Open your Telegram Bot.")
+		fmt.Printf("2. Run the command: /link %s\n", code)
+		fmt.Println("\nThis code will expire in 10 minutes.")
 	},
 }
 

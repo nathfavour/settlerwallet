@@ -71,10 +71,17 @@ var daemonCmd = &cobra.Command{
 
 		// --- Helper: Resolve Account ---
 		getAccountID := func(tgID int64) string {
+			// Check user preference first
+			pref, _ := db.GetUserConfig(tgID, "active_account")
+			if pref != "" {
+				return pref
+			}
+			// Default to linked local account if it exists
 			acc, _ := db.GetAccountByLinkedTGID(tgID)
 			if acc != nil {
 				return acc.ID
 			}
+			// Default to native TG account
 			return fmt.Sprintf("tg:%d", tgID)
 		}
 
@@ -83,14 +90,14 @@ var daemonCmd = &cobra.Command{
 			uid := c.Sender().ID
 			lr, _ := db.GetLinkRequestByTGID(uid)
 			if lr != nil && lr.ExpiresAt > time.Now().Unix() {
-				return c.Send(fmt.Sprintf("🔗 Link request detected for local account '%s'.\n\nYour verification code is: `%s` (Expires in 10m)", 
-					lr.AccountID[6:], lr.Code), telebot.ModeMarkdown)
+				return c.Send(fmt.Sprintf("🔗 Link request detected for local account '%s'.\n\nYour verification code is: `%s` (Expires in 10m)\n\nRun `/link %s` to complete the link.", 
+					lr.AccountID[6:], lr.Code, lr.Code), telebot.ModeMarkdown)
 			}
 
 			accountID := getAccountID(uid)
 			acc, _ := db.GetAccount(accountID)
 			if acc == nil {
-				return c.Send("Welcome! You don't have an account yet. Send /setup to create one.", menu)
+				return c.Send("Welcome! You don't have an account yet. Send /setup to create one or link a local account using `settler link` from your CLI.", menu)
 			}
 
 			welcomeMsg := "Welcome back!"
@@ -98,6 +105,88 @@ var daemonCmd = &cobra.Command{
 				welcomeMsg = fmt.Sprintf("Welcome back! Linked to local account: `%s`", acc.ID[6:])
 			}
 			return c.Send(welcomeMsg, menu, telebot.ModeMarkdown)
+		})
+
+		b.Handle("/link", func(c telebot.Context) error {
+			uid := c.Sender().ID
+			args := c.Args()
+			if len(args) == 0 {
+				return c.Send("❌ Please provide the verification code: `/link <code>`", telebot.ModeMarkdown)
+			}
+			code := args[0]
+
+			lr, _ := db.GetLinkRequestByTGID(uid)
+			if lr == nil || lr.Code != code || lr.ExpiresAt < time.Now().Unix() {
+				return c.Send("❌ Invalid or expired verification code.")
+			}
+
+			acc, _ := db.GetAccount(lr.AccountID)
+			if acc == nil {
+				return c.Send("❌ Error: Local account not found.")
+			}
+
+			acc.LinkedTGID = uid
+			if err := db.SaveAccount(*acc); err != nil {
+				return c.Send("❌ Error saving link.")
+			}
+
+			db.DeleteLinkRequest(lr.AccountID)
+			db.SetUserConfig(uid, "active_account", lr.AccountID)
+
+			return c.Send(fmt.Sprintf("✅ Successfully linked to local account: `%s`", lr.AccountID[6:]), telebot.ModeMarkdown)
+		})
+
+		b.Handle("/switch", func(c telebot.Context) error {
+			uid := c.Sender().ID
+
+			// Find all accounts for this user
+			nativeID := fmt.Sprintf("tg:%d", uid)
+			nativeAcc, _ := db.GetAccount(nativeID)
+
+			linkedAcc, _ := db.GetAccountByLinkedTGID(uid)
+
+			var options []string
+			if nativeAcc != nil {
+				options = append(options, nativeID)
+			}
+			if linkedAcc != nil {
+				options = append(options, linkedAcc.ID)
+			}
+
+			if len(options) < 2 {
+				return c.Send("ℹ️ You only have one account configured. Setup another or link a local account.")
+			}
+
+			args := c.Args()
+			if len(args) == 0 {
+				active := getAccountID(uid)
+				msg := "🔄 **Switch Account**\n\n"
+				for _, opt := range options {
+					indicator := "  "
+					if opt == active {
+						indicator = "👉"
+					}
+					msg += fmt.Sprintf("%s `%s`\n", indicator, opt)
+				}
+				msg += "\nUsage: `/switch <account_id>`"
+				return c.Send(msg, telebot.ModeMarkdown)
+			}
+
+			target := args[0]
+			valid := false
+			for _, opt := range options {
+				if opt == target {
+					valid = true
+					break
+				}
+			}
+
+			if !valid {
+				return c.Send("❌ Invalid account ID.")
+			}
+
+			db.SetUserConfig(uid, "active_account", target)
+			return c.Send(fmt.Sprintf("✅ Switched to account: `%s`", target), telebot.ModeMarkdown)
 		})
 
 		b.Handle("/setup", func(c telebot.Context) error {
