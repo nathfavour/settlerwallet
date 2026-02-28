@@ -3,12 +3,12 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/nathfavour/settlerwallet/internal/vault"
 )
 
 type BNBClient struct {
@@ -31,7 +31,7 @@ func (c *BNBClient) GetBalance(ctx context.Context, address string) (*Balance, e
 	}
 
 	return &Balance{
-		Chain:    BNB,
+		Chain:    vault.ChainBNB,
 		Address:  address,
 		Symbol:   "BNB",
 		Amount:   balance,
@@ -39,10 +39,11 @@ func (c *BNBClient) GetBalance(ctx context.Context, address string) (*Balance, e
 	}, nil
 }
 
-func (c *BNBClient) Transfer(ctx context.Context, from *DerivedKey, req Transfer) (*TransactionResult, error) {
-	if from.Chain != BNB {
+func (c *BNBClient) Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error) {
+	if from.Chain != vault.ChainBNB {
 		return nil, fmt.Errorf("invalid chain for BNB transfer")
 	}
+
 
 	fromAddress := common.HexToAddress(from.Address)
 	nonce, err := c.client.PendingNonceAt(ctx, fromAddress)

@@ -3,19 +3,13 @@ package blockchain
 import (
 	"context"
 	"math/big"
-)
 
-// Chain defines the supported networks.
-type Chain string
-
-const (
-	BNB    Chain = "BNB"
-	Solana Chain = "Solana"
+	"github.com/nathfavour/settlerwallet/internal/vault"
 )
 
 // Balance represents a cross-chain balance.
 type Balance struct {
-	Chain    Chain
+	Chain    vault.Chain
 	Address  string
 	Symbol   string
 	Amount   *big.Int
@@ -39,13 +33,6 @@ type TransactionResult struct {
 // Client defines the interface for interacting with different blockchains.
 type Client interface {
 	GetBalance(ctx context.Context, address string) (*Balance, error)
-	Transfer(ctx context.Context, from *DerivedKey, req Transfer) (*TransactionResult, error)
+	Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error)
 }
 
-// DerivedKey placeholder to avoid circular dependency if needed, 
-// but we can import vault if we structure carefully.
-type DerivedKey struct {
-	PrivateKey []byte
-	Address    string
-	Chain      Chain
-}

@@ -11,21 +11,6 @@ import (
 	"github.com/tyler-smith/go-bip32"
 )
 
-// Chain represents a supported blockchain.
-type Chain string
-
-const (
-	ChainBNB    Chain = "BNB"
-	ChainSolana Chain = "Solana"
-)
-
-// DerivedKey holds the sensitive private key and metadata.
-type DerivedKey struct {
-	PrivateKey []byte
-	Address    string
-	Chain      Chain
-}
-
 // DeriveAccount derives a private key for a specific chain and index.
 func (v *Vault) DeriveAccount(telegramID string, serverSecret string, chain Chain, index uint32) (*DerivedKey, error) {
 	// 1. Derive encryption key to decrypt seed.

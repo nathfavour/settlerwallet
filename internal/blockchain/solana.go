@@ -8,6 +8,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/nathfavour/settlerwallet/internal/vault"
 )
 
 type SolanaClient struct {
@@ -31,7 +32,7 @@ func (c *SolanaClient) GetBalance(ctx context.Context, address string) (*Balance
 	}
 
 	return &Balance{
-		Chain:    Solana,
+		Chain:    vault.ChainSolana,
 		Address:  address,
 		Symbol:   "SOL",
 		Amount:   big.NewInt(int64(balance.Value)),
@@ -39,10 +40,11 @@ func (c *SolanaClient) GetBalance(ctx context.Context, address string) (*Balance
 	}, nil
 }
 
-func (c *SolanaClient) Transfer(ctx context.Context, from *DerivedKey, req Transfer) (*TransactionResult, error) {
-	if from.Chain != Solana {
+func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req Transfer) (*TransactionResult, error) {
+	if from.Chain != vault.ChainSolana {
 		return nil, fmt.Errorf("invalid chain for Solana transfer")
 	}
+
 
 	fromPubKey, err := solana.PublicKeyFromBase58(from.Address)
 	if err != nil {
