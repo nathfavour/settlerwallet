@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/nathfavour/settlerwallet/internal/nexus"
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"gopkg.in/telebot.v3"
 )
@@ -20,8 +19,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	n := nexus.NewNexus()
 
 	// 1. Initial /start command
 	b.Handle("/start", func(c telebot.Context) error {
