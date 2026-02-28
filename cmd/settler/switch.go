@@ -12,8 +12,9 @@ func init() {
 }
 
 var switchCmd = &cobra.Command{
-	Use:   "switch",
+	Use:   "switch [account_name]",
 	Short: "Switch between or list local accounts.",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		db, err := initDB()
 		if err != nil {
@@ -21,6 +22,24 @@ var switchCmd = &cobra.Command{
 		}
 		defer db.Close()
 
+		if len(args) > 0 {
+			targetName := args[0]
+			accountID := fmt.Sprintf("local:%s", targetName)
+			acc, _ := db.GetAccount(accountID)
+			if acc == nil {
+				log.Fatalf("❌ Error: Account '%s' not found.", targetName)
+			}
+
+			cfg := loadConfig()
+			cfg.ActiveAccount = targetName
+			if err := saveConfig(cfg); err != nil {
+				log.Fatalf("❌ Error saving config: %v", err)
+			}
+			fmt.Printf("✅ Switched to account: %s\n", targetName)
+			return
+		}
+
+		// List accounts if no arg
 		accounts, err := db.GetAccountsByType("local")
 		if err != nil {
 			log.Fatalf("❌ Error fetching accounts: %v", err)
@@ -31,18 +50,22 @@ var switchCmd = &cobra.Command{
 			return
 		}
 
+		cfg := loadConfig()
 		fmt.Println("📍 Available Local Accounts:")
 		for _, acc := range accounts {
 			name := acc.ID[6:] // Strip "local:"
-			fmt.Printf("- %s\n", name)
-			
+			indicator := "  "
+			if name == cfg.ActiveAccount {
+				indicator = "👉"
+			}
+			fmt.Printf("%s %s\n", indicator, name)
+
 			wallets, _ := db.GetWallets(acc.ID)
 			for _, w := range wallets {
-				fmt.Printf("  └ %s: %s\n", w.Name, w.Address)
+				fmt.Printf("   └ %s: %s\n", w.Name, w.Address)
 			}
 		}
 
-		fmt.Println("\nTo use a specific account, use the --name flag with other commands.")
-		fmt.Println("Example: ./settlerwallet setup --name my-other-account")
+		fmt.Println("\nTo switch account: settler switch <name>")
 	},
 }

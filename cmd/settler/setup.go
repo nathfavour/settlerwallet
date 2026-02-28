@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strings"
 	"syscall"
 
@@ -15,12 +14,7 @@ import (
 	"golang.org/x/term"
 )
 
-var (
-	accountNameFlag string
-)
-
 func init() {
-	setupCmd.Flags().StringVarP(&accountNameFlag, "name", "n", "", "Name of the local account to create/manage")
 	rootCmd.AddCommand(setupCmd)
 }
 
@@ -86,6 +80,14 @@ var setupCmd = &cobra.Command{
 				log.Fatalf("❌ Error saving account: %v", err)
 			}
 			fmt.Println("✅ Account created and encrypted.")
+
+			// Set as active account if none exists
+			cfg := loadConfig()
+			if cfg.ActiveAccount == "" {
+				cfg.ActiveAccount = name
+				saveConfig(cfg)
+				fmt.Printf("📍 Account '%s' set as active.\n", name)
+			}
 		}
 
 		// Create Wallet
@@ -153,12 +155,4 @@ func readPassword(prompt string) string {
 	}
 	fmt.Println()
 	return string(bytePassword)
-}
-
-func initDB() (*persistence.DB, error) {
-	configDir, _ := os.UserConfigDir()
-	appDir := fmt.Sprintf("%s/settlerwallet", configDir)
-	os.MkdirAll(appDir, 0700)
-	dbPath := fmt.Sprintf("%s/settler.db", appDir)
-	return persistence.NewDB(dbPath)
 }

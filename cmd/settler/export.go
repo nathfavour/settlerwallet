@@ -18,7 +18,6 @@ var (
 )
 
 func init() {
-	exportCmd.Flags().StringVarP(&accountNameFlag, "name", "n", "default", "Name of the local account to export")
 	exportCmd.Flags().BoolVar(&exportPhrase, "phrase", false, "Export the 24-word recovery phrase")
 	exportCmd.Flags().BoolVar(&exportSeed, "seed", false, "Export the 512-bit binary seed (hex)")
 	exportCmd.Flags().BoolVar(&exportAddr, "address", false, "Export public addresses")
@@ -30,6 +29,10 @@ var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Securely export account data.",
 	Run: func(cmd *cobra.Command, args []string) {
+		if accountNameFlag == "" {
+			log.Fatal("❌ Error: No account specified. Use --name or set an active account with 'switch'.")
+		}
+
 		db, err := initDB()
 		if err != nil {
 			log.Fatalf("❌ Database error: %v", err)
