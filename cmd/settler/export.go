@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"github.com/spf13/cobra"
@@ -46,6 +47,16 @@ var exportCmd = &cobra.Command{
 			log.Fatal("❌ No wallets found for this account.")
 		}
 
+		if exportPhrase {
+			fmt.Print("\n⚠️  You are about to view your recovery phrase. Ensure you are in a private environment.\n")
+			fmt.Print("   Continue? (y/n): ")
+			var resp string
+			fmt.Scanln(&resp)
+			if strings.ToLower(resp) != "y" {
+				return
+			}
+		}
+
 		fmt.Printf("🔐 Exporting data for account: %s\n", accountNameFlag)
 		password := readPassword("Enter account password: ")
 
@@ -82,9 +93,12 @@ var exportCmd = &cobra.Command{
 		}
 
 		if exportPhrase {
-			fmt.Print("\n⚠️  Press Enter to clear the screen and exit.")
+			fmt.Print("\n⚠️  Press Enter to clear the screen (and scrollback) and exit.")
 			fmt.Scanln()
-			fmt.Print("\033[H\033[2J") // ANSI clear screen
+			// \033[H: cursor to top-left
+			// \033[2J: clear visible screen
+			// \033[3J: clear scrollback buffer
+			fmt.Print("\033[H\033[2J\033[3J")
 		}
 	},
 }
