@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nathfavour/settlerwallet/internal/blockchain"
 	"github.com/nathfavour/settlerwallet/internal/vault"
+	"github.com/nathfavour/settlerwallet/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -107,7 +107,7 @@ func (m tuiModel) fetchBalances() tea.Cmd {
 		if err != nil {
 			bnbStr = "Error"
 		} else {
-			bnbStr = formatBalance(bnbBal.Amount, 18) + " BNB"
+			bnbStr = utils.FormatBalance(bnbBal.Amount, 18) + " BNB"
 		}
 
 		solBal, err := m.SOLClient.GetBalance(ctx, m.AddressSOL)
@@ -115,7 +115,7 @@ func (m tuiModel) fetchBalances() tea.Cmd {
 		if err != nil {
 			solStr = "Error"
 		} else {
-			solStr = formatBalance(solBal.Amount, 9) + " SOL"
+			solStr = utils.FormatBalance(solBal.Amount, 9) + " SOL"
 		}
 
 		return balanceMsg{BNB: bnbStr, SOL: solStr}
@@ -125,12 +125,6 @@ func (m tuiModel) fetchBalances() tea.Cmd {
 type balanceMsg struct {
 	BNB string
 	SOL string
-}
-
-func formatBalance(amount *big.Int, decimals int) string {
-	f := new(big.Float).SetInt(amount)
-	f.Quo(f, big.NewFloat(10).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)))
-	return f.Text('f', 4)
 }
 
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

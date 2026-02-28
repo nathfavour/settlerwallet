@@ -206,14 +206,14 @@ var daemonCmd = &cobra.Command{
 			if err != nil {
 				msg += "BNB: Error fetching\n"
 			} else {
-				msg += fmt.Sprintf("BNB: `%s BNB`\n", formatBalance(bnbBal.Amount, 18))
+				msg += fmt.Sprintf("BNB: `%s BNB`\n", utils.FormatBalance(bnbBal.Amount, 18))
 			}
 
 			solBal, err := solClient.GetBalance(ctx, solAcc.Address)
 			if err != nil {
 				msg += "SOL: Error fetching\n"
 			} else {
-				msg += fmt.Sprintf("SOL: `%s SOL`\n", formatBalance(solBal.Amount, 9))
+				msg += fmt.Sprintf("SOL: `%s SOL`\n", utils.FormatBalance(solBal.Amount, 9))
 			}
 
 			return c.Send(msg, telebot.ModeMarkdown)
@@ -234,7 +234,7 @@ var daemonCmd = &cobra.Command{
 			current, _ := new(big.Int).SetString(rules.CurrentSpend, 10)
 
 			return c.Send(fmt.Sprintf("🛡️ Guardrail Status:\n\nDaily Limit: `%s` units\nSpent Today: `%s` units",
-				formatBalance(limit, 18), formatBalance(current, 18)), telebot.ModeMarkdown)
+				utils.FormatBalance(limit, 18), utils.FormatBalance(current, 18)), telebot.ModeMarkdown)
 		})
 
 		b.Handle(&btnSetLimit, func(c telebot.Context) error {
@@ -265,10 +265,4 @@ var daemonCmd = &cobra.Command{
 		log.Println("settlerWallet daemon starting...")
 		b.Start()
 	},
-}
-
-func formatBalance(amount *big.Int, decimals int) string {
-	f := new(big.Float).SetInt(amount)
-	f.Quo(f, big.NewFloat(10).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)))
-	return f.Text('f', 4)
 }
