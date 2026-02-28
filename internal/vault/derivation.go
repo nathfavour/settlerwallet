@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"crypto/ed25519"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -88,12 +89,12 @@ func (v *Vault) deriveSolana(seed []byte, index uint32) (*DerivedKey, error) {
 	// Solana's standard derivation for Ed25519 is often done differently.
 	// For now, we'll use a simplified version.
 	// In production, we'd use BIP32-Ed25519 or SLIP-0010.
-	// Using solana-go's basic keypair generation from seed for now.
-	priv := solana.PrivateKeyFromSeed(seed[:32])
+	// Using ed25519.NewKeyFromSeed from the seed for now.
+	priv := ed25519.NewKeyFromSeed(seed[:32])
 	
 	return &DerivedKey{
-		PrivateKey: priv[:],
-		Address:    priv.PublicKey().String(),
+		PrivateKey: priv,
+		Address:    solana.PrivateKey(priv).PublicKey().String(),
 		Chain:      ChainSolana,
 	}, nil
 }
