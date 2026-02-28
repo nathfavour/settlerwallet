@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/nathfavour/settlerwallet/internal/persistence"
 	"github.com/spf13/cobra"
 )
+
+var tgID int64
 
 func init() {
 	linkCmd.Flags().StringVarP(&accountName, "name", "n", "default", "Name of the local account to link")
@@ -17,8 +18,6 @@ func init() {
 	rootCmd.AddCommand(linkCmd)
 	rootCmd.AddCommand(unlinkCmd)
 }
-
-var tgID int64
 
 var linkCmd = &cobra.Command{
 	Use:   "link",
@@ -56,13 +55,11 @@ var linkCmd = &cobra.Command{
 			log.Fatalf("❌ Error creating link request: %v", err)
 		}
 
-		fmt.Printf("🚀 Link request initiated for account '%s' to TG ID %d.
-", accountName, tgID)
+		fmt.Printf("🚀 Link request initiated for account '%s' to TG ID %d.\n", accountName, tgID)
 		fmt.Println("1. Ensure your Telegram Bot is running (./settlerwallet daemon).")
 		fmt.Println("2. Send /start to the bot from the specified Telegram account.")
 		fmt.Println("3. The bot will send you a verification code.")
-		fmt.Print("
-Paste the verification code here: ")
+		fmt.Print("\nPaste the verification code here: ")
 
 		var inputCode string
 		fmt.Scanln(&inputCode)
@@ -100,8 +97,7 @@ var unlinkCmd = &cobra.Command{
 		if err := db.SaveAccount(*acc); err != nil {
 			log.Fatalf("❌ Error unlinking account: %v", err)
 		}
-		fmt.Printf("✅ Success! Account '%s' has been unlinked from Telegram.
-", accountName)
+		fmt.Printf("✅ Success! Account '%s' has been unlinked from Telegram.\n", accountName)
 	},
 }
 

@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
 
 	"github.com/nathfavour/settlerwallet/internal/blockchain"
-	"github.com/nathfavour/settlerwallet/internal/guardrail"
 	"github.com/nathfavour/settlerwallet/internal/persistence"
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"github.com/nathfavour/settlerwallet/pkg/utils"
@@ -65,20 +62,16 @@ var daemonCmd = &cobra.Command{
 
 		// --- Helper: Resolve Account ---
 		getAccountID := func(tgID int64) string {
-			// 1. Check for linked local account
 			acc, _ := db.GetAccountByLinkedTGID(tgID)
 			if acc != nil {
 				return acc.ID
 			}
-			// 2. Fallback to native bot account
 			return fmt.Sprintf("tg:%d", tgID)
 		}
 
 		// --- Handlers ---
 		b.Handle("/start", func(c telebot.Context) error {
 			uid := c.Sender().ID
-			
-			// Check for pending link request
 			lr, _ := db.GetLinkRequestByTGID(uid)
 			if lr != nil && lr.ExpiresAt > time.Now().Unix() {
 				return c.Send(fmt.Sprintf("🔗 Link request detected for local account '%s'.\n\nYour verification code is: `%s` (Expires in 10m)", 
@@ -99,14 +92,12 @@ var daemonCmd = &cobra.Command{
 		})
 
 		b.Handle("/setup", func(c telebot.Context) error {
-			uid := c.Sender().ID
-			accountID := getAccountID(uid)
+			accountID := getAccountID(c.Sender().ID)
 			acc, _ := db.GetAccount(accountID)
 			if acc != nil {
 				return c.Send("⚠️ Your account is already set up.")
 			}
-			// (Simplified setup for brevity - requires password flow from previous step)
-			return c.Send("Please use the password flow to setup your native bot account. (Handled in separate logic)")
+			return c.Send("Please use the password flow to setup your native bot account.")
 		})
 
 		b.Handle(&btnWallet, func(c telebot.Context) error {
