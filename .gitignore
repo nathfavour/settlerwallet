@@ -1,4 +1,5 @@
 bin/
+settler
 *.exe
 *.exe~
 *.dll
