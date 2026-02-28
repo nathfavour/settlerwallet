@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/nathfavour/settlerwallet/internal/vault"
 	"github.com/spf13/cobra"
+)
+
+var (
+	mnemonicInput string
 )
 
 func init() {
