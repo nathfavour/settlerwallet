@@ -11,6 +11,7 @@ var (
 	dbPath          string
 	accountNameFlag string
 	killFlag        bool
+	foregroundFlag  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -43,6 +44,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&dbPath, "db", "", "Database path (default is ~/.config/settlerwallet/settler.db)")
 	rootCmd.PersistentFlags().StringVarP(&accountNameFlag, "name", "n", "", "Account name to use (default from config)")
 	rootCmd.Flags().BoolVarP(&killFlag, "kill", "k", false, "Kill the running background daemon")
+	rootCmd.Flags().BoolVarP(&foregroundFlag, "foreground", "f", false, "Run daemon in foreground")
+	rootCmd.Flags().MarkHidden("foreground")
 }
 
 func Execute() {

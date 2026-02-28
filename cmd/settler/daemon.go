@@ -21,14 +21,10 @@ import (
 	"gopkg.in/telebot.v3"
 )
 
-var foregroundFlag bool
-
 func init() {
 	rootCmd.AddCommand(daemonStartCmd)
 	rootCmd.AddCommand(daemonStopCmd)
 	rootCmd.AddCommand(daemonStatusCmd)
-	rootCmd.Flags().BoolVarP(&foregroundFlag, "foreground", "f", false, "Run daemon in foreground")
-	rootCmd.Flags().MarkHidden("foreground")
 }
 
 // isProcessRunning checks if a process with the given PID is actually alive.
