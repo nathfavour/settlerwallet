@@ -246,7 +246,8 @@ func runDaemon() {
 		settingsMenu.Row(btnBack),
 	)
 
-	// --- Helper: Resolve Account ---	getAccountID := func(tgID int64) string {
+	// --- Helper: Resolve Account ---
+	getAccountID := func(tgID int64) string {
 		// Check user preference first
 		pref, _ := db.GetUserConfig(tgID, "active_account")
 		if pref != "" {
@@ -374,6 +375,7 @@ func runDaemon() {
 		userStates[c.Sender().ID] = &setupState{step: 1, action: "setup"}
 		return c.Send("🔐 Enter a password to encrypt your vault:")
 	})
+
 	b.Handle(telebot.OnText, func(c telebot.Context) error {
 		uid := c.Sender().ID
 		state, ok := userStates[uid]
@@ -426,6 +428,79 @@ func runDaemon() {
 			}
 		}
 		return nil
+	})
+
+	b.Handle(&btnWallet, func(c telebot.Context) error {
+		return c.Send("💳 **Wallet Management**\nManage your accounts and assets.", walletMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnGuardrails, func(c telebot.Context) error {
+		return c.Send("🛡️ **Guardrail Engine**\nRisk management and spend limits.", guardrailMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnAgents, func(c telebot.Context) error {
+		return c.Send("🤖 **Strategy Agents**\nAutonomous financial goroutines.", agentMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnSettings, func(c telebot.Context) error {
+		return c.Send("⚙️ **Settings**\nSystem configuration and account switching.", settingsMenu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnViewLimits, func(c telebot.Context) error {
+		accountID := getAccountID(c.Sender().ID)
+		rules, _ := db.GetRules(accountID)
+		if rules == nil {
+			return c.Send("ℹ️ No guardrails set for this account. Using defaults (1.0% slippage, 1 ETH/BNB limit).")
+		}
+		msg := fmt.Sprintf("📊 **Guardrail Status**\n\nDaily Limit: `%s` wei/lam\nCurrent Spend: `%s`\nMax Slippage: `%.1f%%`", 
+			rules.DailyLimit, rules.CurrentSpend, rules.MaxSlippage)
+		return c.Send(msg, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnBack, func(c telebot.Context) error {
+		return c.Send("🏠 **Main Menu**", menu, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnSwitch, func(c telebot.Context) error {
+		return c.Send("To switch accounts, please use the `/switch` command.")
+	})
+
+	b.Handle(&btnAddress, func(c telebot.Context) error {
+		accountID := getAccountID(c.Sender().ID)
+		wallets, _ := db.GetWallets(accountID)
+		if len(wallets) == 0 {
+			return c.Send("❌ No wallets found.")
+		}
+		msg := "📍 Addresses:\n"
+		for _, w := range wallets {
+			msg += fmt.Sprintf("- %s: `%s`\n", w.Name, w.Address)
+		}
+		return c.Send(msg, telebot.ModeMarkdown)
+	})
+
+	b.Handle(&btnBalance, func(c telebot.Context) error {
+		accountID := getAccountID(c.Sender().ID)
+		wallets, _ := db.GetWallets(accountID)
+		if len(wallets) == 0 {
+			return c.Send("❌ No wallets found.")
+		}
+
+		bnbClient, _ := blockchain.NewBNBClient("https://bsc-dataseed.binance.org")
+		solClient, _ := blockchain.NewSolanaClient("https://api.mainnet-beta.solana.com")
+		
+		msg := "💰 Balances:\n"
+		for _, w := range wallets {
+			var balStr string
+			if w.Chain == string(vault.ChainBNB) {
+				b, _ := bnbClient.GetBalance(context.Background(), w.Address)
+				balStr = utils.FormatBalance(b.Amount, 18) + " BNB"
+			} else {
+				b, _ := solClient.GetBalance(context.Background(), w.Address)
+				balStr = utils.FormatBalance(b.Amount, 9) + " SOL"
+			}
+			msg += fmt.Sprintf("- %s: `%s`\n", w.Name, balStr)
+		}
+		return c.Send(msg, telebot.ModeMarkdown)
 	})
 
 	b.Handle(&btnSend, func(c telebot.Context) error {
@@ -511,83 +586,6 @@ func runDaemon() {
 
 		delete(userStates, uid)
 		return c.Send(fmt.Sprintf("✅ Vault Created!\n\nMnemonic: `%s`", mnemonic), telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnWallet, func(c telebot.Context) error {
-		return c.Send("💳 **Wallet Management**\nManage your accounts and assets.", walletMenu, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnGuardrails, func(c telebot.Context) error {
-		return c.Send("🛡️ **Guardrail Engine**\nRisk management and spend limits.", guardrailMenu, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnAgents, func(c telebot.Context) error {
-		return c.Send("🤖 **Strategy Agents**\nAutonomous financial goroutines.", agentMenu, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnSettings, func(c telebot.Context) error {
-		return c.Send("⚙️ **Settings**\nSystem configuration and account switching.", settingsMenu, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnViewLimits, func(c telebot.Context) error {
-		accountID := getAccountID(c.Sender().ID)
-		rules, _ := db.GetRules(accountID)
-		if rules == nil {
-			return c.Send("ℹ️ No guardrails set for this account. Using defaults (1.0% slippage, 1 ETH/BNB limit).")
-		}
-		msg := fmt.Sprintf("📊 **Guardrail Status**\n\nDaily Limit: `%s` wei/lam\nCurrent Spend: `%s`\nMax Slippage: `%.1f%%`", 
-			rules.DailyLimit, rules.CurrentSpend, rules.MaxSlippage)
-		return c.Send(msg, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnBack, func(c telebot.Context) error {
-		return c.Send("🏠 **Main Menu**", menu, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnSwitch, func(c telebot.Context) error {
-		return c.Send("To switch accounts, please use the `/switch` command.")
-	})
-
-	b.Handle(&btnAddress, func(c telebot.Context) error {
-		accountID := getAccountID(c.Sender().ID)
-		wallets, _ := db.GetWallets(accountID)
-		if len(wallets) == 0 {
-			return c.Send("❌ No wallets found.")
-		}
-		msg := "📍 Addresses:\n"
-		for _, w := range wallets {
-			msg += fmt.Sprintf("- %s: `%s`\n", w.Name, w.Address)
-		}
-		return c.Send(msg, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnBalance, func(c telebot.Context) error {
-		accountID := getAccountID(c.Sender().ID)
-		wallets, _ := db.GetWallets(accountID)
-		if len(wallets) == 0 {
-			return c.Send("❌ No wallets found.")
-		}
-
-		bnbClient, _ := blockchain.NewBNBClient("https://bsc-dataseed.binance.org")
-		solClient, _ := blockchain.NewSolanaClient("https://api.mainnet-beta.solana.com")
-		
-		msg := "💰 Balances:\n"
-		for _, w := range wallets {
-			var balStr string
-			if w.Chain == string(vault.ChainBNB) {
-				b, _ := bnbClient.GetBalance(context.Background(), w.Address)
-				balStr = utils.FormatBalance(b.Amount, 18) + " BNB"
-			} else {
-				b, _ := solClient.GetBalance(context.Background(), w.Address)
-				balStr = utils.FormatBalance(b.Amount, 9) + " SOL"
-			}
-			msg += fmt.Sprintf("- %s: `%s`\n", w.Name, balStr)
-		}
-		return c.Send(msg, telebot.ModeMarkdown)
-	})
-
-	b.Handle(&btnBack, func(c telebot.Context) error {
-		return c.Send("Main Menu:", menu)
 	})
 
 	log.Println("settlerWallet daemon starting...")
