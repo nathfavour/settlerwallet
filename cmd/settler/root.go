@@ -25,6 +25,11 @@ and run strategies on BNB and Solana.`,
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		// If foreground flag is set, run the daemon directly
+		if foregroundFlag {
+			runDaemon()
+			return
+		}
 		// If no subcommand is provided, handle as daemon start/kill
 		if killFlag {
 			daemonStopCmd.Run(cmd, args)
