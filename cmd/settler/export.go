@@ -63,6 +63,17 @@ var exportCmd = &cobra.Command{
 		fmt.Printf("🔐 Exporting data for account: %s\n", accountNameFlag)
 		password := readPassword("Enter account password: ")
 
+		// Verify password by attempting to decrypt the first wallet's mnemonic
+		_, err = vault.Decrypt(wallets[0].EncryptedMnemonic, password, acc.Salt, acc.Iterations)
+		if err != nil {
+			log.Fatalf("❌ Error: Incorrect password or corrupted data.")
+		}
+
+		// If no flags are set, default to showing addresses
+		if !exportPhrase && !exportSeed && !exportAddr {
+			exportAddr = true
+		}
+
 		fmt.Println("\n--- Export Results ---")
 
 		for _, w := range wallets {
