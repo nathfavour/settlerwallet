@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
-	golang.org/x/crypto v0.44.0
+	golang.org/x/crypto v0.45.0
 	gopkg.in/telebot.v3 v3.3.8
 	modernc.org/sqlite v1.46.1
 )
