@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -61,7 +62,7 @@ func (c *BNBClient) GetTokenBalances(ctx context.Context, address string) ([]*Ba
 		// 70a08231 is the 4-byte selector for balanceOf(address)
 		data := append(common.Hex2Bytes("70a08231"), common.LeftPadBytes(userAddr.Bytes(), 32)...)
 
-		msg := types.CallMsg{
+		msg := ethereum.CallMsg{
 			To:   &tokenAddr,
 			Data: data,
 		}

@@ -318,10 +318,10 @@ func (m settlerModel) renderOverview() string {
 		content.WriteString(addrStyle.Render(w.Address[:12] + "..." + w.Address[len(w.Address)-8:]))
 		
 		if len(w.Tokens) > 0 {
-			content.WriteString("\n" + subtleColor.Render("Tokens:") + "\n")
+			content.WriteString("\n" + lipgloss.NewStyle().Foreground(subtleColor).Render("Tokens:") + "\n")
 			for i, t := range w.Tokens {
 				if i >= 3 {
-					content.WriteString(subtleColor.Render(fmt.Sprintf("... +%d more", len(w.Tokens)-3)))
+					content.WriteString(lipgloss.NewStyle().Foreground(subtleColor).Render(fmt.Sprintf("... +%d more", len(w.Tokens)-3)))
 					break
 				}
 				content.WriteString(fmt.Sprintf("• %s\n", t.Balance))

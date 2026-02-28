@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -64,19 +65,37 @@ func (c *SolanaClient) GetTokenBalances(ctx context.Context, address string) ([]
 
 	var results []*Balance
 	for _, acc := range out.Value {
-		parsed := acc.Account.Data.GetRawJSON().(map[string]interface{})
-		info := parsed["parsed"].(map[string]interface{})["info"].(map[string]interface{})
-		tokenAmount := info["tokenAmount"].(map[string]interface{})
-		
-		uiAmount := tokenAmount["uiAmount"].(float64)
-		if uiAmount == 0 {
+		var data struct {
+			Parsed struct {
+				Info struct {
+					Mint        string `json:"mint"`
+					TokenAmount struct {
+						Amount   string  `json:"amount"`
+						Decimals int     `json:"decimals"`
+						UiAmount float64 `json:"uiAmount"`
+					} `json:"tokenAmount"`
+				} `json:"info"`
+			} `json:"parsed"`
+		}
+
+		// Use the correct way to access raw JSON from Solana rpc response
+		raw, err := acc.Account.Data.MarshalJSON()
+		if err != nil {
 			continue
 		}
 
-		mint := info["mint"].(string)
-		decimals := int(tokenAmount["decimals"].(float64))
-		amountStr := tokenAmount["amount"].(string)
-		amount, _ := new(big.Int).SetString(amountStr, 10)
+		err = json.Unmarshal(raw, &data)
+		if err != nil {
+			continue
+		}
+
+		if data.Parsed.Info.TokenAmount.UiAmount == 0 {
+			continue
+		}
+
+		mint := data.Parsed.Info.Mint
+		decimals := data.Parsed.Info.TokenAmount.Decimals
+		amount, _ := new(big.Int).SetString(data.Parsed.Info.TokenAmount.Amount, 10)
 
 		// For now, use the first 4 chars of mint as symbol if we don't have a lookup
 		symbol := mint[:4]
