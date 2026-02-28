@@ -49,10 +49,13 @@ var daemonStartCmd = &cobra.Command{
 
 		// Re-execute the binary with the -f flag
 		executable, _ := os.Executable()
-		child := exec.Command(executable, "-f") // No subcommand needed now
+		child := exec.Command(executable, "-f")
 		child.Stdout = logFile
 		child.Stderr = logFile
-		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // Detach
+		child.Stdin = nil
+		child.SysProcAttr = &syscall.SysProcAttr{
+			Setsid: true, // Create new session to detach from terminal
+		}
 
 		if err := child.Start(); err != nil {
 			log.Fatalf("❌ Failed to start background process: %v", err)
@@ -62,6 +65,7 @@ var daemonStartCmd = &cobra.Command{
 		os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0644)
 		fmt.Printf("✅ settlerWallet daemon started in background (PID: %d).\n", child.Process.Pid)
 		fmt.Printf("📂 Logs: %s\n", logPath)
+		os.Exit(0) // Force parent to exit immediately
 	},
 }
 
