@@ -30,13 +30,14 @@ type LinkRequest struct {
 }
 
 type Wallet struct {
-	ID            int
-	AccountID     string
-	Name          string
-	Chain         string
-	Address       string
-	EncryptedSeed []byte
-	Salt          []byte
+	ID                int
+	AccountID         string
+	Name              string
+	Chain             string
+	Address           string
+	EncryptedSeed     []byte
+	EncryptedMnemonic []byte
+	Salt              []byte
 }
 
 type UserRules struct {
@@ -57,7 +58,6 @@ func NewDB(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Enable foreign keys
 	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
@@ -84,6 +84,7 @@ func NewDB(path string) (*DB, error) {
 			chain TEXT,
 			address TEXT,
 			encrypted_seed BLOB,
+			encrypted_mnemonic BLOB,
 			salt BLOB,
 			FOREIGN KEY(account_id) REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 		);`,
@@ -209,13 +210,13 @@ func (db *DB) GetAccountsByType(t AccountType) ([]Account, error) {
 }
 
 func (db *DB) SaveWallet(w Wallet) error {
-	query := `INSERT INTO wallets (account_id, name, chain, address, encrypted_seed, salt) VALUES (?, ?, ?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, w.AccountID, w.Name, w.Chain, w.Address, w.EncryptedSeed, w.Salt)
+	query := `INSERT INTO wallets (account_id, name, chain, address, encrypted_seed, encrypted_mnemonic, salt) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, w.AccountID, w.Name, w.Chain, w.Address, w.EncryptedSeed, w.EncryptedMnemonic, w.Salt)
 	return err
 }
 
 func (db *DB) GetWallets(accountID string) ([]Wallet, error) {
-	query := `SELECT id, account_id, name, chain, address, encrypted_seed, salt FROM wallets WHERE account_id = ?`
+	query := `SELECT id, account_id, name, chain, address, encrypted_seed, encrypted_mnemonic, salt FROM wallets WHERE account_id = ?`
 	rows, err := db.conn.Query(query, accountID)
 	if err != nil {
 		return nil, err
@@ -225,7 +226,7 @@ func (db *DB) GetWallets(accountID string) ([]Wallet, error) {
 	var wallets []Wallet
 	for rows.Next() {
 		var w Wallet
-		if err := rows.Scan(&w.ID, &w.AccountID, &w.Name, &w.Chain, &w.Address, &w.EncryptedSeed, &w.Salt); err != nil {
+		if err := rows.Scan(&w.ID, &w.AccountID, &w.Name, &w.Chain, &w.Address, &w.EncryptedSeed, &w.EncryptedMnemonic, &w.Salt); err != nil {
 			return nil, err
 		}
 		wallets = append(wallets, w)

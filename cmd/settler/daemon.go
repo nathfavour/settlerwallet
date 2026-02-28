@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -47,6 +49,13 @@ var daemonCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("❌ Failed to start bot: %v", err)
 		}
+
+		// --- State Management ---
+		type setupState struct {
+			step     int
+			password string
+		}
+		userStates := make(map[int64]*setupState)
 
 		// --- Keyboards ---
 		menu := &telebot.ReplyMarkup{ResizeKeyboard: true}
@@ -97,7 +106,77 @@ var daemonCmd = &cobra.Command{
 			if acc != nil {
 				return c.Send("⚠️ Your account is already set up.")
 			}
-			return c.Send("Please use the password flow to setup your native bot account.")
+			userStates[c.Sender().ID] = &setupState{step: 1}
+			return c.Send("🔐 Enter a password to encrypt your vault:")
+		})
+
+		b.Handle(telebot.OnText, func(c telebot.Context) error {
+			uid := c.Sender().ID
+			state, ok := userStates[uid]
+			if !ok {
+				return nil
+			}
+			if state.step == 1 {
+				state.password = c.Text()
+				state.step = 2
+				c.Delete()
+				return c.Send("✅ Password set. Send /confirm to generate your vault.")
+			}
+			return nil
+		})
+
+		b.Handle("/confirm", func(c telebot.Context) error {
+			uid := c.Sender().ID
+			state, ok := userStates[uid]
+			if !ok || state.step != 2 {
+				return c.Send("❌ No pending setup.")
+			}
+
+			accountID := fmt.Sprintf("tg:%d", uid)
+			salt := make([]byte, 16)
+			io.ReadFull(rand.Reader, salt)
+
+			acc := persistence.Account{
+				ID:         accountID,
+				Type:       persistence.AccountTelegram,
+				Salt:       salt,
+				Iterations: vault.KDFIterations,
+			}
+			db.SaveAccount(acc)
+
+			mnemonic, _ := vault.GenerateMnemonic()
+			seed := vault.GetSeedFromMnemonic(mnemonic)
+			encryptedSeed, _ := vault.Encrypt(seed, state.password, salt, acc.Iterations)
+			encryptedMnemonic, _ := vault.Encrypt([]byte(mnemonic), state.password, salt, acc.Iterations)
+			
+			_, bnbAddr, _ := vault.DerivePrivateKey(seed, vault.ChainBNB, 0)
+			_, solAddr, _ := vault.DerivePrivateKey(seed, vault.ChainSolana, 0)
+
+			walletSalt := make([]byte, 12)
+			io.ReadFull(rand.Reader, walletSalt)
+
+			db.SaveWallet(persistence.Wallet{
+				AccountID:         accountID,
+				Name:              "BNB Main",
+				Chain:             string(vault.ChainBNB),
+				Address:           bnbAddr,
+				EncryptedSeed:     encryptedSeed,
+				EncryptedMnemonic: encryptedMnemonic,
+				Salt:              walletSalt,
+			})
+
+			db.SaveWallet(persistence.Wallet{
+				AccountID:         accountID,
+				Name:              "Solana Main",
+				Chain:             string(vault.ChainSolana),
+				Address:           solAddr,
+				EncryptedSeed:     encryptedSeed,
+				EncryptedMnemonic: encryptedMnemonic,
+				Salt:              walletSalt,
+			})
+
+			delete(userStates, uid)
+			return c.Send(fmt.Sprintf("✅ Vault Created!\n\nMnemonic: `%s`", mnemonic), telebot.ModeMarkdown)
 		})
 
 		b.Handle(&btnWallet, func(c telebot.Context) error {

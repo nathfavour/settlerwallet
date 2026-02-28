@@ -99,33 +99,42 @@ var setupCmd = &cobra.Command{
 		_, bnbAddr, _ := vault.DerivePrivateKey(seed, vault.ChainBNB, 0)
 		_, solAddr, _ := vault.DerivePrivateKey(seed, vault.ChainSolana, 0)
 
-		// Encrypt seed with password
+		// Encrypt seed and mnemonic with password
 		encryptedSeed, err := vault.Encrypt(seed, password, acc.Salt, acc.Iterations)
 		if err != nil {
-			log.Fatalf("❌ Encryption error: %v", err)
+			log.Fatalf("❌ Encryption error (seed): %v", err)
+		}
+		encryptedMnemonic, err := vault.Encrypt([]byte(mnemonic), password, acc.Salt, acc.Iterations)
+		if err != nil {
+			log.Fatalf("❌ Encryption error (mnemonic): %v", err)
 		}
 
 		walletSalt := make([]byte, 12) // Nonce for GCM
 		io.ReadFull(rand.Reader, walletSalt)
 
+		existingWallets, _ := db.GetWallets(accountID)
+		walletCount := len(existingWallets) / 2 // Each setup adds 2 wallets
+
 		// Save BNB Wallet
 		db.SaveWallet(persistence.Wallet{
-			AccountID:     accountID,
-			Name:          fmt.Sprintf("BNB-%d", len(args)+1), // Basic naming
-			Chain:         string(vault.ChainBNB),
-			Address:       bnbAddr,
-			EncryptedSeed: encryptedSeed,
-			Salt:          walletSalt,
+			AccountID:         accountID,
+			Name:              fmt.Sprintf("BNB-%d", walletCount+1),
+			Chain:             string(vault.ChainBNB),
+			Address:           bnbAddr,
+			EncryptedSeed:     encryptedSeed,
+			EncryptedMnemonic: encryptedMnemonic,
+			Salt:              walletSalt,
 		})
 
 		// Save Solana Wallet
 		db.SaveWallet(persistence.Wallet{
-			AccountID:     accountID,
-			Name:          fmt.Sprintf("SOL-%d", len(args)+1), // Basic naming
-			Chain:         string(vault.ChainSolana),
-			Address:       solAddr,
-			EncryptedSeed: encryptedSeed,
-			Salt:          walletSalt,
+			AccountID:         accountID,
+			Name:              fmt.Sprintf("SOL-%d", walletCount+1),
+			Chain:             string(vault.ChainSolana),
+			Address:           solAddr,
+			EncryptedSeed:     encryptedSeed,
+			EncryptedMnemonic: encryptedMnemonic,
+			Salt:              walletSalt,
 		})
 
 		fmt.Println("\n✅ Wallets successfully created and sandboxed!")
