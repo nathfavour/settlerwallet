@@ -31,14 +31,29 @@ func init() {
 	rootCmd.Flags().MarkHidden("foreground")
 }
 
+// isProcessRunning checks if a process with the given PID is actually alive.
+func isProcessRunning(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// On Unix, sending signal 0 doesn't kill the process but checks for its existence.
+	err = process.Signal(syscall.Signal(0))
+	return err == nil
+}
+
 var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Starts the daemon in the background.",
 	Run: func(cmd *cobra.Command, args []string) {
 		pidPath := getPIDPath()
-		if _, err := os.Stat(pidPath); err == nil {
-			fmt.Println("❌ Daemon is already running (PID file exists).")
-			return
+		if data, err := os.ReadFile(pidPath); err == nil {
+			if pid, _ := strconv.Atoi(string(data)); isProcessRunning(pid) {
+				fmt.Printf("❌ Daemon is already running (PID: %d).\n", pid)
+				return
+			}
+			// File exists but process is dead, clean it up
+			os.Remove(pidPath)
 		}
 
 		logPath := getLogPath()
@@ -81,6 +96,12 @@ var daemonStopCmd = &cobra.Command{
 		}
 
 		pid, _ := strconv.Atoi(string(data))
+		if !isProcessRunning(pid) {
+			fmt.Printf("ℹ️  Process %d is already dead. Cleaning up stale PID file.\n", pid)
+			os.Remove(pidPath)
+			return
+		}
+
 		process, err := os.FindProcess(pid)
 		if err != nil {
 			fmt.Printf("❌ Failed to find process %d: %v\n", pid, err)
@@ -96,8 +117,9 @@ var daemonStopCmd = &cobra.Command{
 
 		// Wait for PID file to be removed by the child or timeout
 		for i := 0; i < 5; i++ {
-			if _, err := os.Stat(pidPath); os.IsNotExist(err) {
+			if !isProcessRunning(pid) {
 				fmt.Println("stopped.")
+				os.Remove(pidPath)
 				return
 			}
 			time.Sleep(500 * time.Millisecond)
@@ -122,10 +144,9 @@ var daemonStatusCmd = &cobra.Command{
 		}
 
 		pid, _ := strconv.Atoi(string(data))
-		process, err := os.FindProcess(pid)
-		if err != nil || process.Signal(syscall.Signal(0)) != nil {
-			fmt.Println("🤖 Daemon Status: STALE (PID file exists but process is dead)")
-			os.Remove(pidPath)
+		if !isProcessRunning(pid) {
+			fmt.Printf("🤖 Daemon Status: STALE (PID: %d exists but process is dead)\n", pid)
+			fmt.Println("ℹ️  Run 'settlerwallet stop' to clean up.")
 			return
 		}
 
