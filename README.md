@@ -20,7 +20,7 @@
 
 ### Installation (via Anyisland)
 
-The easiest way to get `settlerWallet` up and running is through the [Anyisland CLI](https://github.com/anyisland/anyisland).
+The easiest way to get `settlerWallet` up and running is through the [Anyisland CLI](https://github.com/nathfavour/anyisland).
 
 ```bash
 anyisland install nathfavour/settlerwallet
