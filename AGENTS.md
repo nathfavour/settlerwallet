@@ -42,5 +42,5 @@ func clearBytes(b []byte) {
 ```
 ## 7. Build Instructions
 - Always build binaries into the `bin/` directory to prevent workspace clutter and git pollution.
-- Example: `go build -o bin/daemon ./cmd/daemon`
+- Example: `go build -o bin/settlerwallet ./cmd/settler`
 - The `bin/` directory is ignored by git.

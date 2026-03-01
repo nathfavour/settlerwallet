@@ -33,7 +33,7 @@ If you prefer building from source:
 ```bash
 git clone https://github.com/nathfavour/settlerwallet.git
 cd settlerwallet
-go build -o bin/daemon ./cmd/daemon
+go build -o bin/settlerwallet ./cmd/settler
 ```
 
 ---
@@ -47,7 +47,7 @@ go build -o bin/daemon ./cmd/daemon
 
 2. **Launch the Daemon:**
    ```bash
-   ./bin/daemon
+   ./bin/settlerwallet
    ```
 
 3. **Initialize your Agent:**
