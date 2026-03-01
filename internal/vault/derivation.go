@@ -19,7 +19,7 @@ func DerivePrivateKey(seed []byte, chain Chain, index uint32) ([]byte, string, e
 	}
 
 	switch chain {
-	case ChainBNB:
+	case ChainBNB, ChainBase:
 		return deriveEVM(masterKey, index)
 	case ChainSolana:
 		return deriveSolana(seed, index)
@@ -61,7 +61,7 @@ func deriveSolana(seed []byte, index uint32) ([]byte, string, error) {
 // SignTransaction signs a transaction hash based on the chain.
 func SignTransaction(privateKey []byte, chain Chain, data []byte) ([]byte, error) {
 	switch chain {
-	case ChainBNB:
+	case ChainBNB, ChainBase:
 		priv, err := crypto.ToECDSA(privateKey)
 		if err != nil {
 			return nil, err
@@ -80,6 +80,22 @@ func SignTransaction(privateKey []byte, chain Chain, data []byte) ([]byte, error
 	default:
 		return nil, fmt.Errorf("unsupported chain for signing")
 	}
+}
+
+// SignEVM signs a hash using the EVM private key.
+func (dk *DerivedKey) SignEVM(hash []byte) ([]byte, error) {
+	if dk.Chain != ChainBNB && dk.Chain != ChainBase {
+		return nil, fmt.Errorf("invalid chain for EVM signing")
+	}
+	return SignTransaction(dk.PrivateKey, dk.Chain, hash)
+}
+
+// SignSolana signs a hash using the Solana private key.
+func (dk *DerivedKey) SignSolana(hash []byte) ([]byte, error) {
+	if dk.Chain != ChainSolana {
+		return nil, fmt.Errorf("invalid chain for Solana signing")
+	}
+	return SignTransaction(dk.PrivateKey, dk.Chain, hash)
 }
 
 // GetSeedFromMnemonic converts a mnemonic to a seed.

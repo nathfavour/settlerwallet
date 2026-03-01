@@ -87,3 +87,43 @@ func GenerateMnemonic() (string, error) {
 	}
 	return bip39.NewMnemonic(entropy)
 }
+
+// Vault stores the encrypted mnemonic and salt.
+type Vault struct {
+	EncryptedMnemonic []byte
+	Salt              []byte
+}
+
+// NewVault creates a new Vault by encrypting the mnemonic.
+func NewVault(mnemonic, telegramID, serverSecret string) (*Vault, error) {
+	salt := []byte(telegramID)
+	encrypted, err := Encrypt([]byte(mnemonic), serverSecret, salt, KDFIterations)
+	if err != nil {
+		return nil, err
+	}
+	return &Vault{
+		EncryptedMnemonic: encrypted,
+		Salt:              salt,
+	}, nil
+}
+
+// DeriveAccount decrypts the mnemonic and derives a key for the given chain and index.
+func (v *Vault) DeriveAccount(telegramID, serverSecret string, chain Chain, index uint32) (*DerivedKey, error) {
+	mnemonicBytes, err := Decrypt(v.EncryptedMnemonic, serverSecret, v.Salt, KDFIterations)
+	if err != nil {
+		return nil, err
+	}
+	defer utils.ZeroMemory(mnemonicBytes)
+
+	seed := GetSeedFromMnemonic(string(mnemonicBytes))
+	priv, addr, err := DerivePrivateKey(seed, chain, index)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DerivedKey{
+		PrivateKey: priv,
+		Address:    addr,
+		Chain:      chain,
+	}, nil
+}
