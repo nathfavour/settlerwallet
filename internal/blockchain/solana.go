@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/gagliardetto/solana-go"
+	ata "github.com/gagliardetto/solana-go/programs/associated-token-account"
+	"github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/system"
+	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/nathfavour/settlerwallet/internal/vault"
 )
@@ -47,7 +51,6 @@ func (c *SolanaClient) GetTokenBalances(ctx context.Context, address string) ([]
 		return nil, err
 	}
 
-	// Filter for all token accounts (SPL Token Program)
 	out, err := c.client.GetTokenAccountsByOwner(
 		ctx,
 		pubKey,
@@ -78,7 +81,6 @@ func (c *SolanaClient) GetTokenBalances(ctx context.Context, address string) ([]
 			} `json:"parsed"`
 		}
 
-		// Use the correct way to access raw JSON from Solana rpc response
 		raw, err := acc.Account.Data.MarshalJSON()
 		if err != nil {
 			continue
@@ -97,7 +99,6 @@ func (c *SolanaClient) GetTokenBalances(ctx context.Context, address string) ([]
 		decimals := data.Parsed.Info.TokenAmount.Decimals
 		amount, _ := new(big.Int).SetString(data.Parsed.Info.TokenAmount.Amount, 10)
 
-		// For now, use the first 4 chars of mint as symbol if we don't have a lookup
 		symbol := mint[:4]
 		if mint == "Es9vMFrzaDCSTMdAhcXuzDeWvVK7UXhcrxspTS7jsX3" {
 			symbol = "USDT"
@@ -132,19 +133,74 @@ func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req
 		return nil, err
 	}
 
+	var instructions []solana.Instruction
+
+	// 1. Add Priority Fees (Robustness: Essential for Mainnet)
+	// We'll use a conservative default, but in a real app this might be dynamic.
+	instructions = append(instructions,
+		computeBudget.NewSetComputeUnitPriceInstruction(1000).Build(), // 1000 micro-lamports
+		computeBudget.NewSetComputeUnitLimitInstruction(200000).Build(),
+	)
+
+	if req.Token == "" {
+		// Native SOL Transfer
+		instructions = append(instructions,
+			system.NewTransferInstruction(
+				req.Amount.Uint64(),
+				fromPubKey,
+				toPubKey,
+			).Build(),
+		)
+	} else {
+		// SPL Token Transfer
+		mintPubKey, err := solana.PublicKeyFromBase58(req.Token)
+		if err != nil {
+			return nil, fmt.Errorf("invalid token mint: %w", err)
+		}
+
+		// Get source ATA
+		sourceATA, _, err := solana.FindAssociatedTokenAddress(fromPubKey, mintPubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get destination ATA
+		destATA, _, err := solana.FindAssociatedTokenAddress(toPubKey, mintPubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if destination ATA exists, if not, create it
+		_, err = c.client.GetAccountInfo(ctx, destATA)
+		if err != nil {
+			// Assume it doesn't exist (or other error, but we'll try to create it)
+			instructions = append(instructions,
+				ata.NewCreateInstruction(
+					fromPubKey,
+					toPubKey,
+					mintPubKey,
+				).Build(),
+			)
+		}
+
+		instructions = append(instructions,
+			token.NewTransferInstruction(
+				req.Amount.Uint64(),
+				sourceATA,
+				destATA,
+				fromPubKey,
+				[]solana.PublicKey{},
+			).Build(),
+		)
+	}
+
 	recent, err := c.client.GetRecentBlockhash(ctx, rpc.CommitmentFinalized)
 	if err != nil {
 		return nil, err
 	}
 
 	tx, err := solana.NewTransaction(
-		[]solana.Instruction{
-			system.NewTransferInstruction(
-				req.Amount.Uint64(),
-				fromPubKey,
-				toPubKey,
-			).Build(),
-		},
+		instructions,
 		recent.Value.Blockhash,
 		solana.TransactionPayer(fromPubKey),
 	)
@@ -152,6 +208,16 @@ func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req
 		return nil, err
 	}
 
+	// 2. Simulation (Robustness: Catch errors before broadcast)
+	sim, err := c.client.SimulateTransaction(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("simulation failed: %w", err)
+	}
+	if sim.Value.Err != nil {
+		return nil, fmt.Errorf("simulation error: %v", sim.Value.Err)
+	}
+
+	// Sign
 	privKey := solana.PrivateKey(from.PrivateKey)
 	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
 		if key.Equals(fromPubKey) {
@@ -163,13 +229,39 @@ func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req
 		return nil, err
 	}
 
-	sig, err := c.client.SendTransaction(ctx, tx)
+	// 3. Send and Confirm (Robustness: Ensure inclusion)
+	sig, err := c.client.SendTransactionWithOpts(ctx, tx, rpc.TransactionOpts{
+		SkipPreflight:       false,
+		PreflightCommitment: rpc.CommitmentFinalized,
+	})
 	if err != nil {
 		return nil, err
 	}
 
+	// Wait for confirmation (polling for simplicity, could use WebSocket)
+	// In a real robust app, we'd have a better timeout/retry loop.
+	success := false
+	for i := 0; i < 30; i++ {
+		status, err := c.client.GetSignatureStatuses(ctx, false, sig)
+		if err == nil && len(status.Value) > 0 && status.Value[0] != nil {
+			if status.Value[0].ConfirmationStatus == rpc.ConfirmationStatusConfirmed ||
+				status.Value[0].ConfirmationStatus == rpc.ConfirmationStatusFinalized {
+				success = true
+				break
+			}
+			if status.Value[0].Err != nil {
+				return &TransactionResult{
+					Hash:    sig.String(),
+					Success: false,
+					Error:   fmt.Errorf("transaction failed: %v", status.Value[0].Err),
+				}, nil
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 	return &TransactionResult{
 		Hash:    sig.String(),
-		Success: true,
+		Success: success,
 	}, nil
 }

@@ -2,6 +2,9 @@ package vault
 
 import (
 	"crypto/ed25519"
+	"crypto/hmac"
+	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -22,7 +25,7 @@ func DerivePrivateKey(seed []byte, chain Chain, index uint32) ([]byte, string, e
 	case ChainBNB, ChainBase:
 		return deriveEVM(masterKey, index)
 	case ChainSolana:
-		return deriveSolana(seed, index)
+		return deriveSolanaRobust(seed, index)
 	default:
 		return nil, "", fmt.Errorf("unsupported chain: %s", chain)
 	}
@@ -51,11 +54,48 @@ func deriveEVM(masterKey *bip32.Key, index uint32) ([]byte, string, error) {
 	return currentKey.Key, address, nil
 }
 
-func deriveSolana(seed []byte, index uint32) ([]byte, string, error) {
-	// Simple Ed25519 derivation from seed for now
-	priv := ed25519.NewKeyFromSeed(seed[:32])
+// deriveSolanaRobust implements SLIP-0010 for Solana derivation (m/44'/501'/0'/0')
+func deriveSolanaRobust(seed []byte, index uint32) ([]byte, string, error) {
+	// Standard path: m/44'/501'/0'/0'
+	// All indices must be hardened for Ed25519 (SLIP-0010)
+	path := []uint32{
+		44 + 0x80000000,
+		501 + 0x80000000,
+		0 + 0x80000000,
+		0 + 0x80000000,
+		index + 0x80000000,
+	}
+
+	// Master Key
+	hmac512 := hmac.New(sha512.New, []byte("ed25519 seed"))
+	hmac512.Write(seed)
+	result := hmac512.Sum(nil)
+
+	key := result[:32]
+	chainCode := result[32:]
+
+	for _, idx := range path {
+		key, chainCode = deriveChildEd25519(key, chainCode, idx)
+	}
+
+	priv := ed25519.NewKeyFromSeed(key)
 	address := solana.PrivateKey(priv).PublicKey().String()
 	return priv, address, nil
+}
+
+func deriveChildEd25519(key, chainCode []byte, index uint32) ([]byte, []byte) {
+	hmac512 := hmac.New(sha512.New, chainCode)
+	
+	// Data = 0x00 || key || index (big-endian)
+	data := make([]byte, 1+32+4)
+	data[0] = 0x00
+	copy(data[1:], key)
+	binary.BigEndian.PutUint32(data[33:], index)
+	
+	hmac512.Write(data)
+	result := hmac512.Sum(nil)
+	
+	return result[:32], result[32:]
 }
 
 // SignTransaction signs a transaction hash based on the chain.

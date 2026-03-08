@@ -1,7 +1,7 @@
 # 🏦 settlerWallet
 > **The High-Performance, Agentic Wallet Daemon.**
 
-`settlerWallet` is not just a wallet; it's an active financial actor. Written in Go for maximum performance and safety, it transforms private keys from static secrets into autonomous agents that observe, analyze, and act across multiple chains.
+`settlerWallet` is not just a wallet; it's an active financial actor. Written in Go for maximum performance and safety, it is powered by [**settlerengine**](https://github.com/nathfavour/settlerengine), a payment engine/processor built from the ground up to power settler AI agentic wallets. It transforms private keys from static secrets into autonomous agents that observe, analyze, and act across multiple chains.
 
 ---
 
