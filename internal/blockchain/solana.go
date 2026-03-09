@@ -138,8 +138,8 @@ func (c *SolanaClient) Transfer(ctx context.Context, from *vault.DerivedKey, req
 	// 1. Add Priority Fees (Robustness: Essential for Mainnet)
 	// We'll use a conservative default, but in a real app this might be dynamic.
 	instructions = append(instructions,
-		computeBudget.NewSetComputeUnitPriceInstruction(1000).Build(), // 1000 micro-lamports
-		computeBudget.NewSetComputeUnitLimitInstruction(200000).Build(),
+		computebudget.NewSetComputeUnitPriceInstruction(1000).Build(), // 1000 micro-lamports
+		computebudget.NewSetComputeUnitLimitInstruction(200000).Build(),
 	)
 
 	if req.Token == "" {
