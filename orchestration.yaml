@@ -1,0 +1,26 @@
+# Settlerwallet Orchestration Configuration
+# Modular capabilities for DON-based Orchestration
+
+orchestration:
+  # Real-time sanctions and risk screening
+  compliance:
+    enabled: true
+    # Risk API endpoint (e.g., Chainalysis/Elliptic)
+    risk_api_url: "https://api.risk-service.io/v1/screen"
+    risk_threshold: 0.8
+    api_key_secret_id: "RISK_API_KEY"
+
+  # Confidential Compute Layer for external banking/KYC APIs
+  privacy:
+    enabled: true
+    # Confidential HTTP endpoint
+    kyc_api_url: "https://api.banking-kyc.com/v1/verify"
+    secret_id: "KYC_API_SECRET"
+
+  # AI/LLM Integration for natural language intent parsing
+  intent:
+    enabled: true
+    # LLM endpoint for intent parsing
+    llm_api_url: "https://api.llm-provider.com/v1/parse-intent"
+    model: "gpt-4o-settler"
+    api_key_secret_id: "LLM_API_KEY"

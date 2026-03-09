@@ -1,22 +1,22 @@
 # Settlerwallet Modular Orchestration Tasks
 
-- [ ] Setup DON-based Orchestration Layer
-    - [ ] Initialize `internal/services/orchestration` directory
-    - [ ] Integrate CRE Go SDK
-    - [ ] Create `orchestration.yaml` for modular configuration
-- [ ] Implement Compliance Module (ACE Logic)
-    - [ ] Implement "Gatekeeper" function for real-time sanctions and risk screening
-    - [ ] Integrate external Risk API (e.g., Chainalysis/Elliptic)
-    - [ ] Ensure it's the first step in the workflow
-- [ ] Implement Privacy Module (Confidential Compute Layer)
-    - [ ] Create standalone CRE capability using ConfidentialHTTP
-    - [ ] Logic for EncryptedUserID → Boolean (Verified)
-    - [ ] Ensure PII stays within TEE
-- [ ] Implement Intent Module (AI/LLM Integration)
-    - [ ] Build stateless "Intent Parser" within the workflow
-    - [ ] Integrate LLM endpoint via CRE HTTP
-    - [ ] Implement strict JSON schema for settlement objects (Asset, Amount, Destination)
-- [ ] Integration and Testing
-    - [ ] Connect orchestration layer to core wallet (signing remains in core)
-    - [ ] Local simulation using CRE CLI
-    - [ ] Verify modular toggling via `orchestration.yaml`
+- [x] Setup DON-based Orchestration Layer
+    - [x] Initialize `internal/services/orchestration` directory
+    - [x] Integrate CRE Go SDK
+    - [x] Create `orchestration.yaml` for modular configuration
+- [x] Implement Compliance Module (ACE Logic)
+    - [x] Implement "Gatekeeper" function for real-time sanctions and risk screening
+    - [x] Integrate external Risk API (e.g., Chainalysis/Elliptic)
+    - [x] Ensure it's the first step in the workflow
+- [x] Implement Privacy Module (Confidential Compute Layer)
+    - [x] Create standalone CRE capability using ConfidentialHTTP
+    - [x] Logic for EncryptedUserID → Boolean (Verified)
+    - [x] Ensure PII stays within TEE
+- [x] Implement Intent Module (AI/LLM Integration)
+    - [x] Build stateless "Intent Parser" within the workflow
+    - [x] Integrate LLM endpoint via CRE HTTP
+    - [x] Implement strict JSON schema for settlement objects (Asset, Amount, Destination)
+- [x] Integration and Testing
+    - [x] Connect orchestration layer to core wallet (via `orchestrate` command)
+    - [x] Local simulation using CRE SDK components
+    - [x] Verify modular toggling via `orchestration.yaml`
