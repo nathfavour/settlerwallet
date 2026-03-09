@@ -1,26 +1,22 @@
-# TODO.md: settlerWallet Roadmap
+# Settlerwallet Modular Orchestration Tasks
 
-## Phase 1: The Secure Core
-- [x] Implement BIP39/44 HD derivation logic in Go.
-- [x] Build the AES-256-GCM Vault for encrypted user secrets storage.
-- [ ] Create the Signer Service for payload signing.
-- [x] Implement `mlock` and memory zeroing utilities for Linux.
-
-## Phase 2: The Multi-Chain Connector
-- [x] Implement BNB/EVM transaction broadcasting using `ethclient`.
-- [x] Implement Solana transaction construction and broadcasting using `gagliardetto/solana-go`.
-- [x] Define standardized `Balance` and `Transfer` types across both chains.
-- [ ] Implement basic RPC connection management/failover.
-
-## Phase 3: The Agentic Loop
-- [ ] Create the `Nexus` dispatcher for routing events to user goroutines.
-- [ ] Build the `Scheduler` to run strategies every N blocks.
-- [x] Implement the `Guardrail Engine` for slippage and daily spend limits.
-- [x] Build the `telebot` middleware for multi-user session management (Menus & Persistent Vaults).
-- [ ] Implement the "Alpha Strategy": Auto-Compounder for AsterDEX.
-
-## Long-term & Polish
-- [ ] gRPC/Unix-socket daemon interface for CLI/TUI clients.
-- [x] Persistence layer: SQLite for user vaults and guardrail rules.
-- [ ] Persistence layer: PostgreSQL for blobs and Redis for price caching.
-- [ ] Advanced Guardrails: Contract whitelisting and MEV protection.
+- [ ] Setup DON-based Orchestration Layer
+    - [ ] Initialize `internal/services/orchestration` directory
+    - [ ] Integrate CRE Go SDK
+    - [ ] Create `orchestration.yaml` for modular configuration
+- [ ] Implement Compliance Module (ACE Logic)
+    - [ ] Implement "Gatekeeper" function for real-time sanctions and risk screening
+    - [ ] Integrate external Risk API (e.g., Chainalysis/Elliptic)
+    - [ ] Ensure it's the first step in the workflow
+- [ ] Implement Privacy Module (Confidential Compute Layer)
+    - [ ] Create standalone CRE capability using ConfidentialHTTP
+    - [ ] Logic for EncryptedUserID → Boolean (Verified)
+    - [ ] Ensure PII stays within TEE
+- [ ] Implement Intent Module (AI/LLM Integration)
+    - [ ] Build stateless "Intent Parser" within the workflow
+    - [ ] Integrate LLM endpoint via CRE HTTP
+    - [ ] Implement strict JSON schema for settlement objects (Asset, Amount, Destination)
+- [ ] Integration and Testing
+    - [ ] Connect orchestration layer to core wallet (signing remains in core)
+    - [ ] Local simulation using CRE CLI
+    - [ ] Verify modular toggling via `orchestration.yaml`
